@@ -1,0 +1,100 @@
+{
+  "doctype": "DocType",
+  "name": "Productivity Line Info",
+  "module": "Factory Productivity",
+  "custom": 0,
+  "autoname": "field:legacy_id",
+  "allow_import": 1,
+  "track_changes": 1,
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "istable": 0,
+  "fields": [
+    {
+      "fieldname": "legacy_id",
+      "label": "Legacy ID",
+      "fieldtype": "Data",
+      "unique": 1,
+      "length": 36,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "company",
+      "label": "Company",
+      "fieldtype": "Link",
+      "options": "Company",
+      "reqd": 1
+    },
+    {
+      "fieldname": "factory",
+      "label": "Factory",
+      "fieldtype": "Link",
+      "options": "Factory",
+      "reqd": 1
+    },
+    {
+      "fieldname": "line",
+      "label": "Production Line",
+      "fieldtype": "Link",
+      "options": "Production Line",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "device",
+      "label": "Factory Device",
+      "fieldtype": "Link",
+      "options": "Factory Device"
+    },
+    {
+      "fieldname": "line_leader_name",
+      "label": "Line Leader Name",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "technical_leader_name",
+      "label": "Technical Leader Name",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "updated_by_device_name",
+      "label": "Updated By Device Name",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "is_deleted",
+      "label": "Is Deleted",
+      "fieldtype": "Check",
+      "default": "0"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1,
+      "report": 1,
+      "export": 1,
+      "import": 1
+    },
+    {
+      "role": "Productivity Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1,
+      "report": 1,
+      "export": 1,
+      "import": 1
+    },
+    {
+      "role": "Productivity Viewer",
+      "read": 1,
+      "report": 1,
+      "export": 1
+    }
+  ]
+}
+

@@ -1,0 +1,30 @@
+{
+  "doctype": "DocType",
+  "name": "Productivity Report Time Slot",
+  "module": "Factory Productivity",
+  "custom": 0,
+  "autoname": "hash",
+  "allow_import": 0,
+  "track_changes": 1,
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "istable": 1,
+  "fields": [
+    {
+      "fieldname": "time_slot",
+      "label": "Time Slot",
+      "fieldtype": "Link",
+      "options": "Time Slot",
+      "reqd": 1
+    },
+    {
+      "fieldname": "finished_quantity",
+      "label": "Finished Quantity",
+      "fieldtype": "Int",
+      "reqd": 1,
+      "non_negative": 1
+    }
+  ],
+  "permissions": []
+}
+

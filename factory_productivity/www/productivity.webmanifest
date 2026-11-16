@@ -1,0 +1,10 @@
+{
+  "name": "Factory Productivity",
+  "short_name": "Productivity",
+  "start_url": "/app/productivity-entry",
+  "scope": "/app/productivity-entry",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [{"src": "/assets/factory_productivity/images/productivity.svg", "sizes": "any", "type": "image/svg+xml"}]
+}

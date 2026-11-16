@@ -1,0 +1,31 @@
+Productivity Entry,Nhập liệu năng suất
+Device ID,Mã thiết bị
+New Plan,Tạo kế hoạch
+New Report,Tạo báo cáo
+Sync,Đồng bộ
+Refresh,Làm mới
+Online,Đang kết nối
+Offline,Đang ngoại tuyến
+Pending operations,Thao tác chờ đồng bộ
+Plans,Kế hoạch
+Reports,Báo cáo
+Production Line,Chuyền sản xuất
+Product,Mã hàng
+Line Start Date,Ngày lên chuyền
+Shipment Date,Ngày giao hàng
+Planned Quantity,Sản lượng kế hoạch
+Production Plan,Kế hoạch sản xuất
+Production Date,Ngày sản xuất
+Daily Target Quantity,Chỉ tiêu ngày
+Working Hours,Giờ làm việc
+Worker Count,Số công nhân
+Ironing Delivery Quantity,Số lượng giao ủi
+Time Slots,Khung giờ
+Time Slot,Khung giờ
+Finished Quantity,Số lượng hoàn thành
+Save,Lưu
+Could not load data.,Không thể tải dữ liệu.
+Could not sync data.,Không thể đồng bộ dữ liệu.
+Productivity Production Plan,Kế hoạch sản xuất
+Productivity Report,Báo cáo năng suất
+Productivity Line Info,Thông tin chuyền

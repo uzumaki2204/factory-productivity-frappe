@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "factory_productivity"
+version = "0.1.0"
+description = "Productivity for Frappe 16"
+requires-python = ">=3.14"
+
+[tool.bench.frappe-dependencies]
+frappe = ">=16.53.0,<17.0.0"
+factory_management = ">=0.1.87,<0.2.0"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["factory_productivity*"]
+
+[tool.setuptools.package-data]
+factory_productivity = ["*.txt", "*.json", "translations/*.csv", "www/*.js", "www/*.webmanifest", "public/js/*.js", "public/images/*.svg", "public/*.json", "factory_productivity/doctype/*/*.json", "factory_productivity/page/*/*.json", "factory_productivity/page/*/*.js"]
+

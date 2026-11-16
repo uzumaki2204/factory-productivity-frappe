@@ -1,0 +1,156 @@
+{
+  "doctype": "DocType",
+  "name": "Productivity Production Plan",
+  "module": "Factory Productivity",
+  "custom": 0,
+  "autoname": "field:legacy_id",
+  "allow_import": 1,
+  "track_changes": 1,
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "istable": 0,
+  "fields": [
+    {
+      "fieldname": "legacy_id",
+      "label": "Legacy ID",
+      "fieldtype": "Data",
+      "unique": 1,
+      "length": 36,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "company",
+      "label": "Company",
+      "fieldtype": "Link",
+      "options": "Company",
+      "reqd": 1,
+      "in_standard_filter": 1
+    },
+    {
+      "fieldname": "factory",
+      "label": "Factory",
+      "fieldtype": "Link",
+      "options": "Factory",
+      "reqd": 1
+    },
+    {
+      "fieldname": "line",
+      "label": "Production Line",
+      "fieldtype": "Link",
+      "options": "Production Line",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "line_snapshot_type",
+      "label": "Line Snapshot Type",
+      "fieldtype": "Select",
+      "options": "line\ngroup",
+      "default": "line"
+    },
+    {
+      "fieldname": "line_snapshot_code",
+      "label": "Line Snapshot Code",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "line_snapshot_name",
+      "label": "Line Snapshot Name",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "line_group",
+      "label": "Line Group",
+      "fieldtype": "Link",
+      "options": "Line Group"
+    },
+    {
+      "fieldname": "line_group_snapshot_code",
+      "label": "Line Group Snapshot Code",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "line_group_snapshot_name",
+      "label": "Line Group Snapshot Name",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "product",
+      "label": "Product",
+      "fieldtype": "Link",
+      "options": "Product",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "line_start_date",
+      "label": "Line Start Date",
+      "fieldtype": "Date",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "shipment_date",
+      "label": "Shipment Date",
+      "fieldtype": "Date",
+      "reqd": 1
+    },
+    {
+      "fieldname": "closed_production_date",
+      "label": "Closed Production Date",
+      "fieldtype": "Date"
+    },
+    {
+      "fieldname": "closed_at",
+      "label": "Closed At",
+      "fieldtype": "Datetime"
+    },
+    {
+      "fieldname": "closed_by",
+      "label": "Closed By",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "planned_quantity",
+      "label": "Planned Quantity",
+      "fieldtype": "Int",
+      "reqd": 1,
+      "non_negative": 1
+    },
+    {
+      "fieldname": "is_deleted",
+      "label": "Is Deleted",
+      "fieldtype": "Check",
+      "default": "0"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1,
+      "report": 1,
+      "export": 1,
+      "import": 1
+    },
+    {
+      "role": "Productivity Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1,
+      "report": 1,
+      "export": 1,
+      "import": 1
+    },
+    {
+      "role": "Productivity Viewer",
+      "read": 1,
+      "report": 1,
+      "export": 1
+    }
+  ]
+}
+

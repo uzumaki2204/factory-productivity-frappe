@@ -1,0 +1,5 @@
+{
+  "doctype": "Page", "name": "productivity-entry", "page_name": "productivity-entry",
+  "module": "Factory Productivity", "title": "Productivity Entry", "standard": "Yes",
+  "roles": [{"role": "System Manager"}, {"role": "Productivity Manager"}, {"role": "Productivity Viewer"}]
+}

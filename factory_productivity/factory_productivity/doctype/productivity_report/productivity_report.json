@@ -1,0 +1,160 @@
+{
+  "doctype": "DocType",
+  "name": "Productivity Report",
+  "module": "Factory Productivity",
+  "custom": 0,
+  "autoname": "field:legacy_id",
+  "allow_import": 1,
+  "track_changes": 1,
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "istable": 0,
+  "fields": [
+    {
+      "fieldname": "legacy_id",
+      "label": "Legacy ID",
+      "fieldtype": "Data",
+      "unique": 1,
+      "length": 36,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "company",
+      "label": "Company",
+      "fieldtype": "Link",
+      "options": "Company",
+      "reqd": 1
+    },
+    {
+      "fieldname": "factory",
+      "label": "Factory",
+      "fieldtype": "Link",
+      "options": "Factory",
+      "reqd": 1
+    },
+    {
+      "fieldname": "line",
+      "label": "Production Line",
+      "fieldtype": "Link",
+      "options": "Production Line",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "line_snapshot_type",
+      "label": "Line Snapshot Type",
+      "fieldtype": "Select",
+      "options": "line\ngroup",
+      "default": "line"
+    },
+    {
+      "fieldname": "line_snapshot_code",
+      "label": "Line Snapshot Code",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "line_snapshot_name",
+      "label": "Line Snapshot Name",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "line_group",
+      "label": "Line Group",
+      "fieldtype": "Link",
+      "options": "Line Group"
+    },
+    {
+      "fieldname": "device",
+      "label": "Factory Device",
+      "fieldtype": "Link",
+      "options": "Factory Device"
+    },
+    {
+      "fieldname": "production_date",
+      "label": "Production Date",
+      "fieldtype": "Date",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "production_plan",
+      "label": "Production Plan",
+      "fieldtype": "Link",
+      "options": "Productivity Production Plan",
+      "reqd": 1
+    },
+    {
+      "fieldname": "product",
+      "label": "Product",
+      "fieldtype": "Link",
+      "options": "Product",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "daily_target_quantity",
+      "label": "Daily Target Quantity",
+      "fieldtype": "Int",
+      "non_negative": 1
+    },
+    {
+      "fieldname": "working_hours",
+      "label": "Working Hours",
+      "fieldtype": "Float",
+      "non_negative": 1
+    },
+    {
+      "fieldname": "worker_count",
+      "label": "Worker Count",
+      "fieldtype": "Int",
+      "non_negative": 1
+    },
+    {
+      "fieldname": "ironing_delivery_quantity",
+      "label": "Ironing Delivery Quantity",
+      "fieldtype": "Int",
+      "non_negative": 1
+    },
+    {
+      "fieldname": "time_slots",
+      "label": "Time Slots",
+      "fieldtype": "Table",
+      "options": "Productivity Report Time Slot"
+    },
+    {
+      "fieldname": "is_deleted",
+      "label": "Is Deleted",
+      "fieldtype": "Check",
+      "default": "0"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1,
+      "report": 1,
+      "export": 1,
+      "import": 1
+    },
+    {
+      "role": "Productivity Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1,
+      "report": 1,
+      "export": 1,
+      "import": 1
+    },
+    {
+      "role": "Productivity Viewer",
+      "read": 1,
+      "report": 1,
+      "export": 1
+    }
+  ]
+}
+
