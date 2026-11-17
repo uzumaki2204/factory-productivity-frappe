@@ -25,9 +25,9 @@
       <div id="plan-scope" class="productivity-grid">
         <label id="plan-line-field" hidden>{{ texts['ui.line'] }}<select class="form-control" name="line" required></select></label>
         <div class="productivity-product-field">
-          <label for="plan-product-picker-button">{{ texts['ui.product'] }}</label>
+          <label id="plan-product-label" for="plan-product-picker-button">{{ texts['ui.product'] }}</label>
           <input type="hidden" name="product">
-          <button id="plan-product-picker-button" class="btn btn-default productivity-product-trigger" type="button" aria-haspopup="dialog" aria-controls="plan-product-dialog" aria-expanded="false"><span id="plan-product-picker-value">{{ texts['ui.select_product'] }}</span><span aria-hidden="true">▾</span></button>
+          <button id="plan-product-picker-button" class="btn btn-default productivity-product-trigger" type="button" aria-labelledby="plan-product-label plan-product-picker-value" aria-haspopup="dialog" aria-controls="plan-product-dialog" aria-expanded="false"><span id="plan-product-picker-value">{{ texts['ui.select_product'] }}</span><span aria-hidden="true">▾</span></button>
         </div>
         <label>{{ texts['ui.line_start_date'] }}<input class="form-control" type="date" name="line_start_date" required></label>
         <label>{{ texts['ui.shipment_date'] }}<input class="form-control" type="date" name="shipment_date" required></label>
