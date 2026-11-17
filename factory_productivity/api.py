@@ -2,7 +2,7 @@
 import hashlib
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import frappe
 from factory_management import device_registry
@@ -70,23 +70,67 @@ def scoped_record(doctype, name, device):
     return doc
 
 
-def _page(doctype, device, page=1, page_size=50, extra=None):
+def _page(doctype, device, page=1, page_size=50, from_date=None, to_date=None, keyword=None):
     try:
         page = max(1, int(page))
         page_size = min(200, max(1, int(page_size)))
     except (TypeError, ValueError):
         fail("error.invalid_input")
-    filters = {"company": device.company, "factory": device.factory, "line": ["in", scope_lines(device)], "is_deleted": 0}
-    filters.update(extra or {})
-    names = frappe.get_all(
-        doctype, fields=["name"], filters=filters,
-        order_by="modified desc", start=(page - 1) * page_size, page_length=page_size,
+
+    if doctype not in (PLAN, REPORT):
+        fail("error.invalid_input")
+    try:
+        start = date.fromisoformat(str(from_date)) if from_date else None
+        end = date.fromisoformat(str(to_date)) if to_date else None
+    except ValueError:
+        fail("error.date")
+    if start and end and start > end:
+        fail("error.date")
+
+    values = {"company": device.company, "factory": device.factory, "lines": tuple(scope_lines(device))}
+    where = ["r.company = %(company)s", "r.factory = %(factory)s", "r.line IN %(lines)s", "r.is_deleted = 0"]
+    if doctype == REPORT:
+        if start:
+            where.append("r.production_date >= %(from_date)s")
+        if end:
+            where.append("r.production_date <= %(to_date)s")
+    else:
+        if start:
+            where.append("COALESCE(r.closed_production_date, r.shipment_date) >= %(from_date)s")
+        if end:
+            where.append("r.line_start_date <= %(to_date)s")
+    if start:
+        values["from_date"] = start
+    if end:
+        values["to_date"] = end
+
+    query = str(keyword or "").strip()
+    if len(query) > 100:
+        fail("error.invalid_input")
+    joins = ""
+    if query:
+        joins = (
+            " LEFT JOIN `tabProduct` p ON p.name = r.product"
+            " LEFT JOIN `tabProduction Line` l ON l.name = r.line"
+        )
+        where.append(
+            "(r.product LIKE %(keyword)s OR p.product_code LIKE %(keyword)s"
+            " OR p.product_name LIKE %(keyword)s OR l.line_code LIKE %(keyword)s"
+            " OR l.line_name LIKE %(keyword)s)"
+        )
+        values["keyword"] = f"%{query}%"
+    source = f" FROM `tab{doctype}` r{joins} WHERE " + " AND ".join(where)
+    total = frappe.db.sql("SELECT COUNT(r.name)" + source, values)[0][0]
+    values.update({"limit": page_size, "offset": (page - 1) * page_size})
+    names = frappe.db.sql(
+        "SELECT r.name" + source + " ORDER BY r.modified DESC LIMIT %(limit)s OFFSET %(offset)s",
+        values, as_dict=True,
     )
     return {
         "items": [frappe.get_doc(doctype, row.name).as_dict() for row in names],
         "page": page,
         "page_size": page_size,
-        "total": frappe.db.count(doctype, filters=filters),
+        "total": total,
     }
 
 
@@ -129,7 +173,8 @@ def _save(doctype, device, data):
         plan = scoped_record(PLAN, doc.production_plan, device)
         if plan.is_deleted:
             fail("error.plan_missing")
-        if plan.closed_production_date and str(doc.production_date) > str(plan.closed_production_date):
+        original_plan = None if doc.is_new() else frappe.db.get_value(REPORT, doc.name, "production_plan")
+        if plan.closed_production_date and doc.production_plan != original_plan:
             fail("error.plan_closed")
     if doctype == LINE_INFO:
         doc.updated_by_device_name = device.device_name
@@ -167,13 +212,30 @@ def bootstrap(device_id=None):
 
 
 @frappe.whitelist(allow_guest=True, methods=["GET"])
-def list_plans(device_id=None, page=1, page_size=50):
-    return _page(PLAN, device_for(device_id), page, page_size)
+def list_plans(device_id=None, page=1, page_size=50, from_date=None, to_date=None, keyword=None):
+    return _page(PLAN, device_for(device_id), page, page_size, from_date, to_date, keyword)
 
 
 @frappe.whitelist(allow_guest=True, methods=["GET"])
-def list_reports(device_id=None, page=1, page_size=50):
-    return _page(REPORT, device_for(device_id), page, page_size)
+def open_plans(device_id=None, production_date=None, line=None):
+    device = device_for(device_id)
+    if line:
+        require_line(device, line)
+    try:
+        day = date.fromisoformat(str(production_date))
+    except ValueError:
+        fail("error.date")
+    filters = {"company": device.company, "factory": device.factory,
+               "line": line or ["in", scope_lines(device)], "is_deleted": 0,
+               "closed_production_date": ["is", "not set"],
+               "line_start_date": ["<=", day]}
+    return frappe.get_all(PLAN, fields=["name", "line", "product", "line_start_date", "shipment_date"],
+                          filters=filters, limit_page_length=200)
+
+
+@frappe.whitelist(allow_guest=True, methods=["GET"])
+def list_reports(device_id=None, page=1, page_size=50, from_date=None, to_date=None, keyword=None):
+    return _page(REPORT, device_for(device_id), page, page_size, from_date, to_date, keyword)
 
 
 @frappe.whitelist(allow_guest=True, methods=["GET"])

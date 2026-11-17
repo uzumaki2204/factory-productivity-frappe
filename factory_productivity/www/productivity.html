@@ -1,0 +1,91 @@
+{% extends "templates/base.html" %}
+{% block head %}{{ include_style('desk.bundle.css') }}<link rel="manifest" href="/productivity.webmanifest"><link rel="stylesheet" href="/assets/factory_productivity/css/productivity.css?v={{ asset_version }}">{% endblock %}
+{% block navbar %}{% endblock %}
+{% block footer %}{% endblock %}
+{% block content %}
+<main id="productivity-app" class="container productivity-app" data-lang="{{ lang }}">
+  <header class="productivity-header">
+    <div class="productivity-brand"><img src="/assets/factory_productivity/images/productivity.svg" alt="" width="36" height="36"><strong>{{ texts['ui.title'] }}</strong></div>
+    <div class="productivity-header-actions">
+      <span id="connection-status" class="indicator-pill" role="status" aria-live="polite"></span>
+      <button id="sync-button" class="btn btn-default btn-sm" type="button">{{ texts['ui.sync'] }} <span id="pending-count"></span></button>
+      <button id="device-button" class="btn btn-default btn-sm" type="button">{{ texts['ui.device'] }}</button>
+    </div>
+  </header>
+  <div id="notice" class="alert" role="status" aria-live="polite" hidden></div>
+  <nav class="productivity-nav" aria-label="{{ texts['ui.navigation'] }}">
+    <button class="productivity-nav-button active" data-view="plans" type="button">{{ texts['ui.plans'] }}</button>
+    <button class="productivity-nav-button" data-view="reports" type="button">{{ texts['ui.reports'] }}</button>
+    <button class="productivity-nav-button" data-view="line-info" type="button">{{ texts['ui.line_info'] }}</button>
+  </nav>
+  <section id="plans-view" class="productivity-view">
+    <div class="productivity-section-heading"><h1>{{ texts['ui.plans'] }}</h1><button class="btn btn-primary" id="new-plan" type="button">{{ texts['ui.new_plan'] }}</button></div>
+    <form id="plan-form" class="productivity-card" hidden>
+      <div class="productivity-form-heading"><h2 id="plan-form-title">{{ texts['ui.new_plan'] }}</h2><button class="btn btn-default" data-cancel="plan" type="button">{{ texts['ui.cancel'] }}</button></div>
+      <div class="productivity-grid">
+        <label>{{ texts['ui.line'] }}<select class="form-control" name="line" required></select></label>
+        <label>{{ texts['ui.product'] }}<select class="form-control" name="product" required></select></label>
+        <label>{{ texts['ui.line_start_date'] }}<input class="form-control" type="date" name="line_start_date" required></label>
+        <label>{{ texts['ui.shipment_date'] }}<input class="form-control" type="date" name="shipment_date" required></label>
+        <label>{{ texts['ui.planned_quantity'] }}<input class="form-control" type="number" min="0" step="1" name="planned_quantity" required></label>
+      </div>
+      <div class="productivity-form-actions"><button class="btn btn-primary" type="submit">{{ texts['ui.save'] }}</button></div>
+    </form>
+    <form id="plans-filter" class="productivity-card productivity-filter">
+      <label>{{ texts['ui.from_date'] }}<input class="form-control" type="date" name="from_date"></label>
+      <label>{{ texts['ui.to_date'] }}<input class="form-control" type="date" name="to_date"></label>
+      <label>{{ texts['ui.search'] }}<input class="form-control" type="search" name="keyword" placeholder="{{ texts['ui.search_placeholder'] }}"></label>
+      <button class="btn btn-default" type="submit">{{ texts['ui.search'] }}</button>
+    </form>
+    <div id="plans-list" class="productivity-list" aria-live="polite"></div>
+    <div id="plans-pagination" class="productivity-pagination"></div>
+  </section>
+  <section id="reports-view" class="productivity-view" hidden>
+    <div class="productivity-section-heading"><h1>{{ texts['ui.reports'] }}</h1><button class="btn btn-primary" id="new-report" type="button">{{ texts['ui.new_report'] }}</button></div>
+    <form id="report-form" class="productivity-card" hidden>
+      <div class="productivity-form-heading"><h2 id="report-form-title">{{ texts['ui.new_report'] }}</h2><button class="btn btn-default" data-cancel="report" type="button">{{ texts['ui.cancel'] }}</button></div>
+      <div class="productivity-grid">
+        <label>{{ texts['ui.production_date'] }}<input class="form-control" type="date" name="production_date" required></label>
+        <label>{{ texts['ui.line'] }}<select class="form-control" name="line" required></select></label>
+        <label>{{ texts['ui.production_plan'] }}<select class="form-control" name="production_plan" required></select></label>
+        <label>{{ texts['ui.product'] }}<input class="form-control" name="product_display" readonly></label>
+        <label>{{ texts['ui.daily_target'] }}<input class="form-control" type="number" min="0" step="1" name="daily_target_quantity" required></label>
+        <label>{{ texts['ui.hours'] }}<input class="form-control" type="number" min="0" step="0.01" name="working_hours" required></label>
+        <label>{{ texts['ui.worker_count'] }}<input class="form-control" type="number" min="0" step="1" name="worker_count" required></label>
+        <label>{{ texts['ui.ironing_delivery'] }}<input class="form-control" type="number" min="0" step="1" name="ironing_delivery_quantity" required></label>
+      </div>
+      <div class="productivity-slots-heading"><h3>{{ texts['ui.time_slots'] }}</h3><button class="btn btn-default" id="add-slot" type="button">{{ texts['ui.add_slot'] }}</button></div>
+      <div id="slot-rows"></div>
+      <p class="productivity-total">{{ texts['ui.finished_total'] }}: <strong id="finished-total">0</strong></p>
+      <div class="productivity-form-actions"><button class="btn btn-primary" type="submit">{{ texts['ui.save'] }}</button></div>
+    </form>
+    <form id="reports-filter" class="productivity-card productivity-filter">
+      <label>{{ texts['ui.from_date'] }}<input class="form-control" type="date" name="from_date"></label>
+      <label>{{ texts['ui.to_date'] }}<input class="form-control" type="date" name="to_date"></label>
+      <label>{{ texts['ui.search'] }}<input class="form-control" type="search" name="keyword" placeholder="{{ texts['ui.search_placeholder'] }}"></label>
+      <button class="btn btn-default" type="submit">{{ texts['ui.search'] }}</button>
+    </form>
+    <div id="reports-list" class="productivity-list" aria-live="polite"></div>
+    <div id="reports-pagination" class="productivity-pagination"></div>
+  </section>
+  <section id="line-info-view" class="productivity-view" hidden>
+    <div class="productivity-section-heading"><h1>{{ texts['ui.line_info'] }}</h1></div>
+    <form id="line-info-form" class="productivity-card">
+      <div class="productivity-grid">
+        <label>{{ texts['ui.line'] }}<select class="form-control" name="line" required></select></label>
+        <label>{{ texts['ui.leader'] }}<input class="form-control" name="line_leader_name" required></label>
+        <label>{{ texts['ui.technical_leader'] }}<input class="form-control" name="technical_leader_name" required></label>
+      </div>
+      <div class="productivity-form-actions"><button class="btn btn-primary" type="submit">{{ texts['ui.save'] }}</button></div>
+    </form>
+  </section>
+</main>
+<dialog id="device-dialog" class="productivity-dialog" aria-labelledby="device-title">
+  <div class="productivity-dialog-heading"><h2 id="device-title">{{ texts['ui.device'] }}</h2><button class="btn btn-default" data-close-dialog type="button">{{ texts['ui.close'] }}</button></div>
+  <p>{{ texts['ui.device_help'] }}</p>
+  <form id="device-form"><label>{{ texts['ui.device'] }}<input id="device-id" class="form-control" name="device_id" autocomplete="off" required></label><button class="btn btn-primary mt-3" type="submit">{{ texts['ui.activate'] }}</button></form>
+</dialog>
+<dialog id="detail-dialog" class="productivity-dialog" aria-labelledby="detail-title"><div class="productivity-dialog-heading"><h2 id="detail-title">{{ texts['ui.report_detail'] }}</h2><button class="btn btn-default" data-close-dialog type="button">{{ texts['ui.close'] }}</button></div><div id="detail-content"></div></dialog>
+<script id="productivity-texts" type="application/json">{{ texts_json | safe }}</script>
+<script src="/assets/factory_productivity/js/productivity.js?v={{ asset_version }}" defer></script>
+{% endblock %}

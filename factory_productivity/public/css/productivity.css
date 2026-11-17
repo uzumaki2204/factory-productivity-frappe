@@ -1,0 +1,54 @@
+body { background: var(--bg-color, #f8f9fa); }
+.productivity-app { max-width: 1100px; padding-bottom: 6rem; }
+.productivity-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 68px; border-bottom: 1px solid var(--border-color, #ddd); }
+.productivity-brand, .productivity-header-actions, .productivity-section-heading, .productivity-form-heading, .productivity-slots-heading, .productivity-card-actions, .productivity-pagination { display: flex; align-items: center; gap: .6rem; }
+.productivity-brand { font-size: 1.2rem; }
+.productivity-header-actions { flex-wrap: wrap; justify-content: flex-end; }
+.productivity-nav { display: flex; gap: .4rem; margin: 1rem 0; border-bottom: 1px solid var(--border-color, #ddd); }
+.productivity-nav-button { min-height: 44px; padding: .65rem 1rem; background: transparent; border: 0; color: var(--text-muted, #6c757d); font-weight: 600; }
+.productivity-nav-button.active { color: var(--primary, #2490ef); border-bottom: 2px solid currentColor; }
+.productivity-view[hidden], .productivity-card[hidden] { display: none; }
+.productivity-section-heading, .productivity-form-heading, .productivity-slots-heading { justify-content: space-between; margin: 1.2rem 0 .8rem; }
+.productivity-section-heading h1 { font-size: 1.4rem; margin: 0; }
+.productivity-form-heading h2, .productivity-slots-heading h3 { font-size: 1.05rem; margin: 0; }
+.productivity-card { background: var(--card-bg, #fff); border: 1px solid var(--border-color, #ddd); border-radius: 8px; padding: 1rem; margin-bottom: .8rem; }
+.productivity-card label { display: block; margin-bottom: .7rem; font-weight: 500; }
+.productivity-card .form-control { margin-top: .35rem; }
+.productivity-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 .9rem; }
+.productivity-filter { display: grid; grid-template-columns: 1fr 1fr 2fr auto; gap: .65rem; align-items: end; }
+.productivity-filter label { margin: 0; }
+.productivity-filter button { min-height: 38px; }
+.productivity-list { display: grid; gap: .7rem; }
+.productivity-record { background: var(--card-bg, #fff); border: 1px solid var(--border-color, #ddd); border-radius: 8px; padding: 1rem; }
+.productivity-record summary { cursor: pointer; list-style: none; }
+.productivity-record summary::-webkit-details-marker { display: none; }
+.productivity-record-top, .productivity-record-meta, .productivity-card-actions { display: flex; justify-content: space-between; gap: .6rem; flex-wrap: wrap; }
+.productivity-record-title { font-weight: 650; }
+.productivity-record-meta { color: var(--text-muted, #6c757d); margin-top: .4rem; }
+.productivity-record-body { border-top: 1px solid var(--border-color, #ddd); margin-top: .8rem; padding-top: .8rem; }
+.productivity-record-body dl { display: grid; grid-template-columns: 1fr 1fr; gap: .3rem .7rem; }
+.productivity-record-body dt { color: var(--text-muted, #6c757d); font-weight: 400; }
+.productivity-record-body dd { text-align: right; margin: 0; }
+.productivity-card-actions { justify-content: flex-start; margin-top: .8rem; }
+.productivity-pagination { justify-content: center; margin: 1rem 0; }
+.productivity-empty { text-align: center; padding: 2rem; color: var(--text-muted, #6c757d); }
+.productivity-slot-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto; gap: .5rem; align-items: end; margin-bottom: .5rem; }
+.productivity-slot-row label { margin: 0; }
+.productivity-total { text-align: right; margin-top: .7rem; }
+.productivity-form-actions { display: flex; justify-content: flex-end; margin-top: .8rem; }
+.productivity-dialog { border: 1px solid var(--border-color, #ddd); border-radius: 8px; padding: 1.25rem; width: min(94vw, 560px); max-height: 90vh; overflow: auto; }
+.productivity-dialog::backdrop { background: rgba(0, 0, 0, .4); }
+.productivity-dialog-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: .8rem; }
+.productivity-dialog-heading h2 { font-size: 1.2rem; margin: 0; }
+.productivity-dialog label { display: block; }
+@media (max-width: 767px) {
+  .productivity-app { padding-left: .75rem; padding-right: .75rem; padding-bottom: calc(5rem + env(safe-area-inset-bottom)); }
+  .productivity-header { min-height: 60px; }
+  .productivity-brand { font-size: 1rem; }
+  .productivity-header-actions { gap: .3rem; }
+  .productivity-nav { position: fixed; z-index: 20; bottom: 0; left: 0; right: 0; margin: 0; padding-bottom: env(safe-area-inset-bottom); background: var(--card-bg, #fff); border-top: 1px solid var(--border-color, #ddd); box-shadow: 0 -2px 8px rgba(0,0,0,.06); }
+  .productivity-nav-button { flex: 1; padding: .6rem .25rem; font-size: .9rem; }
+  .productivity-grid, .productivity-filter { grid-template-columns: 1fr; }
+  .productivity-filter { gap: .4rem; }
+  .productivity-filter button { width: 100%; }
+}
