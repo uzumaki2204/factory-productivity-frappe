@@ -1,4 +1,4 @@
-"""Provision the missing Time Slot master without replacing a site-owned DocType."""
+"""Provision a shared Time Slot master without replacing a site-owned DocType."""
 import frappe
 from factory_productivity.i18n import message
 
@@ -16,7 +16,7 @@ def execute():
     frappe.get_doc({
         "doctype": "DocType",
         "name": "Time Slot",
-        "module": "Factory Productivity",
+        "module": "Factory Management",
         "custom": 1,
         "autoname": "format:{company}-{slot_name}",
         "allow_import": 1,
