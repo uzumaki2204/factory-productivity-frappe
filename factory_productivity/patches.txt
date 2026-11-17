@@ -1,4 +1,5 @@
 [pre_model_sync]
+factory_productivity.patches.ensure_module
 factory_productivity.patches.ensure_time_slot
 
 [post_model_sync]

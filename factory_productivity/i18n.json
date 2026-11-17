@@ -1,6 +1,7 @@
 {
   "vi": {
     "error.missing_doctype": "Thiếu DocType bắt buộc: {doctype}.",
+    "error.module_conflict": "Module {module} đang thuộc một app khác.",
     "error.time_slot_schema": "DocType Time Slot hiện có thiếu trường: {fields}.",
     "error.device_missing": "Không tìm thấy thiết bị.",
     "error.device_pending": "Thiết bị chưa được duyệt hoặc đã ngừng hoạt động.",
@@ -42,6 +43,7 @@
   },
   "en": {
     "error.missing_doctype": "Required DocType is missing: {doctype}.",
+    "error.module_conflict": "Module {module} belongs to another app.",
     "error.time_slot_schema": "Existing Time Slot DocType is missing fields: {fields}.",
     "error.device_missing": "Device was not found.",
     "error.device_pending": "Device is not approved or is inactive.",
