@@ -70,10 +70,28 @@
 
     function fillMasters() {
         for (const form of [$('#plan-form'), $('#report-form'), $('#line-info-form')]) options(form.elements.line, state.bootstrap.lines || [], x => lineName(x.name), form.elements.line.value || state.bootstrap.device?.line);
-        options($('#plan-form').elements.product, state.bootstrap.products || [], x => productCode(x.name), $('#plan-form').elements.product.value);
+        updatePlanProductPicker();
         $('#plan-line-field').hidden = (state.bootstrap.lines || []).length === 1;
         $('#report-line-field').hidden = (state.bootstrap.lines || []).length === 1;
         $('#report-scope').dataset.singleLine = String($('#report-line-field').hidden);
+        if ($('#plan-product-dialog').open) renderPlanProductPicker();
+    }
+
+    function updatePlanProductPicker() {
+        const input = $('#plan-form').elements.product;
+        const product = (state.bootstrap.products || []).find(row => row.name === input.value && row.product_code);
+        if (!product) input.value = '';
+        $('#plan-product-picker-value').textContent = product?.product_code || t('ui.select_product');
+        if (product) $('#plan-product-picker-button').removeAttribute('aria-invalid');
+    }
+
+    function renderPlanProductPicker() {
+        const products = (state.bootstrap.products || []).filter(row => row.product_code);
+        const keyword = $('#plan-product-search').value.trim().toLocaleLowerCase();
+        const matching = products.filter(row => row.product_code.toLocaleLowerCase().includes(keyword));
+        $('#plan-product-grid').innerHTML = matching.length
+            ? matching.map(row => `<button class="btn btn-default productivity-product-card" type="button" data-product-id="${esc(row.name)}" aria-pressed="${row.name === $('#plan-form').elements.product.value}">${esc(row.product_code)}</button>`).join('')
+            : `<p class="productivity-empty">${esc(t(products.length ? 'ui.no_matching_products' : 'ui.no_products'))}</p>`;
     }
 
     function filterValues(kind) {
@@ -200,6 +218,8 @@
         $('#plan-form-title').textContent = t(row ? 'ui.edit_plan' : 'ui.new_plan');
         form.elements.line.value = row?.line || state.bootstrap.device?.line || '';
         form.elements.product.value = row?.product || '';
+        $('#plan-product-picker-button').removeAttribute('aria-invalid');
+        updatePlanProductPicker();
         form.elements.line_start_date.value = row?.line_start_date || today();
         form.elements.shipment_date.value = row?.shipment_date || '';
         form.elements.planned_quantity.value = row?.planned_quantity ?? '';
@@ -335,10 +355,36 @@
     });
     $('#sync-button').addEventListener('click', sync);
     $('#new-plan').addEventListener('click', () => beginPlan());
+    $('#plan-product-picker-button').addEventListener('click', () => {
+        $('#plan-product-search').value = '';
+        renderPlanProductPicker();
+        $('#plan-product-picker-button').setAttribute('aria-expanded', 'true');
+        $('#plan-product-dialog').showModal();
+        $('#plan-product-search').focus();
+    });
+    $('#plan-product-search').addEventListener('input', renderPlanProductPicker);
+    $('#plan-product-grid').addEventListener('click', event => {
+        const button = event.target.closest('[data-product-id]');
+        if (!button) return;
+        const product = (state.bootstrap.products || []).find(row => row.name === button.dataset.productId && row.product_code);
+        if (!product) return;
+        $('#plan-form').elements.product.value = product.name;
+        updatePlanProductPicker();
+        $('#plan-product-dialog').close();
+    });
+    $('#plan-product-dialog').addEventListener('close', () => {
+        $('#plan-product-picker-button').setAttribute('aria-expanded', 'false');
+        $('#plan-product-picker-button').focus();
+    });
     $('#new-report').addEventListener('click', () => beginReport());
     $$('[data-cancel]').forEach(button => button.addEventListener('click', () => { $(`#${button.dataset.cancel}-form`).hidden = true; }));
     $('#plan-form').addEventListener('submit', event => {
         event.preventDefault(); const form = event.currentTarget;
+        if (!form.elements.product.value) {
+            $('#plan-product-picker-button').setAttribute('aria-invalid', 'true');
+            $('#plan-product-picker-button').focus();
+            return notice(t('ui.choose_product'), 'warning');
+        }
         const values = { name: editing.plan || id(), line: form.elements.line.value, product: form.elements.product.value, line_start_date: form.elements.line_start_date.value, shipment_date: form.elements.shipment_date.value, planned_quantity: Number(form.elements.planned_quantity.value) };
         queue('save_plan', values); form.hidden = true;
     });

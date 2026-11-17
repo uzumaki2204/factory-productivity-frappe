@@ -1,6 +1,6 @@
 {
   "app": "factory_productivity",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "branch": "version-16",
   "frappe": ">=16.53.0,<17.0.0",
   "factory_management": ">=0.1.87,<0.2.0",

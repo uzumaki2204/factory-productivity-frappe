@@ -15,6 +15,10 @@ body { background: var(--bg-color, #f8f9fa); }
 .productivity-card label { display: block; margin-bottom: .7rem; font-weight: 500; }
 .productivity-card label[hidden] { display: none; }
 .productivity-card .form-control { margin-top: .35rem; }
+.productivity-product-field { margin-bottom: .7rem; }
+.productivity-product-field label { margin-bottom: .35rem; }
+.productivity-product-trigger { display: flex; align-items: center; justify-content: space-between; gap: .5rem; width: 100%; min-height: 38px; padding-inline: .75rem; text-align: left; }
+.productivity-product-trigger[aria-invalid="true"] { border-color: var(--red-500, #e03636); }
 .productivity-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 .9rem; }
 .productivity-grid[data-single-line="true"] { grid-template-columns: 1fr; }
 .productivity-plan-summary { display: grid; gap: .35rem; padding: .5rem 0 1rem; margin-bottom: .75rem; border-bottom: 1px solid var(--border-color, #ddd); }
@@ -50,6 +54,12 @@ body { background: var(--bg-color, #f8f9fa); }
 .productivity-dialog-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: .8rem; }
 .productivity-dialog-heading h2 { font-size: 1.2rem; margin: 0; }
 .productivity-dialog label { display: block; }
+.productivity-product-dialog { width: min(94vw, 720px); }
+.productivity-product-dialog .form-control { margin: .35rem 0 1rem; }
+.productivity-product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: .6rem; max-height: 58vh; overflow: auto; }
+.productivity-product-card { min-height: 54px; padding: .75rem; font-weight: 600; overflow-wrap: anywhere; }
+.productivity-product-card[aria-pressed="true"] { border-color: var(--primary, #171717); box-shadow: inset 0 0 0 1px var(--primary, #171717); }
+.productivity-product-card:focus-visible { outline: 2px solid var(--primary, #171717); outline-offset: 2px; }
 @media (max-width: 767px) {
   .productivity-app { padding-left: .75rem; padding-right: .75rem; padding-bottom: calc(5rem + env(safe-area-inset-bottom)); }
   .productivity-header { min-height: 60px; flex-wrap: wrap; padding: .6rem 0; }
@@ -60,4 +70,5 @@ body { background: var(--bg-color, #f8f9fa); }
   .productivity-grid, .productivity-filter { grid-template-columns: 1fr; }
   .productivity-filter { gap: .4rem; }
   .productivity-filter button { width: 100%; }
+  .productivity-product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

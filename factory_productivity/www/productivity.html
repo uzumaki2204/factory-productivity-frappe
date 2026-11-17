@@ -24,7 +24,11 @@
       <div class="productivity-form-heading"><h2 id="plan-form-title">{{ texts['ui.new_plan'] }}</h2><button class="btn btn-default" data-cancel="plan" type="button">{{ texts['ui.cancel'] }}</button></div>
       <div id="plan-scope" class="productivity-grid">
         <label id="plan-line-field" hidden>{{ texts['ui.line'] }}<select class="form-control" name="line" required></select></label>
-        <label>{{ texts['ui.product'] }}<select class="form-control" name="product" required></select></label>
+        <div class="productivity-product-field">
+          <label for="plan-product-picker-button">{{ texts['ui.product'] }}</label>
+          <input type="hidden" name="product">
+          <button id="plan-product-picker-button" class="btn btn-default productivity-product-trigger" type="button" aria-haspopup="dialog" aria-controls="plan-product-dialog" aria-expanded="false"><span id="plan-product-picker-value">{{ texts['ui.select_product'] }}</span><span aria-hidden="true">▾</span></button>
+        </div>
         <label>{{ texts['ui.line_start_date'] }}<input class="form-control" type="date" name="line_start_date" required></label>
         <label>{{ texts['ui.shipment_date'] }}<input class="form-control" type="date" name="shipment_date" required></label>
         <label>{{ texts['ui.planned_quantity'] }}<input class="form-control" type="number" min="0" step="1" name="planned_quantity" required></label>
@@ -81,6 +85,12 @@
     </form>
   </section>
 </main>
+<dialog id="plan-product-dialog" class="productivity-dialog productivity-product-dialog" aria-labelledby="plan-product-title">
+  <div class="productivity-dialog-heading"><h2 id="plan-product-title">{{ texts['ui.select_product'] }}</h2><button class="btn btn-default" data-close-dialog type="button">{{ texts['ui.close'] }}</button></div>
+  <label for="plan-product-search">{{ texts['ui.search_product'] }}</label>
+  <input id="plan-product-search" class="form-control" type="search" placeholder="{{ texts['ui.search_product_placeholder'] }}" autocomplete="off">
+  <div id="plan-product-grid" class="productivity-product-grid"></div>
+</dialog>
 <dialog id="device-dialog" class="productivity-dialog" aria-labelledby="device-title">
   <div class="productivity-dialog-heading"><h2 id="device-title">{{ texts['ui.device'] }}</h2><button class="btn btn-default" data-close-dialog type="button">{{ texts['ui.close'] }}</button></div>
   <p>{{ texts['ui.device_help'] }}</p>
