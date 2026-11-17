@@ -1,8 +1,8 @@
 {
   "app": "factory_productivity",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "branch": "version-16",
   "frappe": ">=16.53.0,<17.0.0",
   "factory_management": ">=0.1.87,<0.2.0",
-  "migration": "migrate runs pre_model_sync Time Slot and post_model_sync permission patches"
+  "migration": "migrate runs pre_model_sync Time Slot and post_model_sync permission and default shift patches"
 }

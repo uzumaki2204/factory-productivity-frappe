@@ -32,8 +32,10 @@ body { background: var(--bg-color, #f8f9fa); }
 .productivity-card-actions { justify-content: flex-start; margin-top: .8rem; }
 .productivity-pagination { justify-content: center; margin: 1rem 0; }
 .productivity-empty { text-align: center; padding: 2rem; color: var(--text-muted, #6c757d); }
-.productivity-slot-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto; gap: .5rem; align-items: end; margin-bottom: .5rem; }
-.productivity-slot-row label { margin: 0; }
+.productivity-slot-grid { margin-top: 1rem; border-top: 1px solid var(--border-color, #ddd); }
+.productivity-slot-row { display: grid; grid-template-columns: minmax(0, 1fr) 110px; gap: .75rem; align-items: center; padding: .65rem .2rem; border-bottom: 1px solid var(--border-color, #ddd); }
+.productivity-slot-row label { margin: 0; font-weight: 500; }
+.productivity-slot-row .form-control { margin: 0; text-align: center; }
 .productivity-total { text-align: right; margin-top: .7rem; }
 .productivity-form-actions { display: flex; justify-content: flex-end; margin-top: .8rem; }
 .productivity-dialog { border: 1px solid var(--border-color, #ddd); border-radius: 8px; padding: 1.25rem; width: min(94vw, 560px); max-height: 90vh; overflow: auto; }

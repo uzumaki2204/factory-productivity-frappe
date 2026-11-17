@@ -4,7 +4,7 @@ Independent Frappe 16 app for production plans, per-shift reports and line infor
 
 ## Install and update
 
-Install `factory_management` first. Add this repository to the bench as app `factory_productivity`, install it on the target site, then run `bench --site <site> migrate`. Pilot should pull the `version-16` branch and run migrate on updates. The app includes `patches.txt` for `Time Slot` provisioning and role permissions. No historical records are copied during installation or migration.
+Install `factory_management` first. Add this repository to the bench as app `factory_productivity`, install it on the target site, then run `bench --site <site> migrate`. Pilot should pull the `version-16` branch and run migrate on updates. The app includes patches for `Time Slot` provisioning, role permissions and six default shifts for approved-device companies without configured slots. Existing slot configuration is preserved. No historical records are copied during installation or migration.
 
 ## Manual import
 

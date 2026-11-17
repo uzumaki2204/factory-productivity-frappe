@@ -3,4 +3,5 @@ factory_productivity.patches.ensure_time_slot
 
 [post_model_sync]
 factory_productivity.patches.ensure_permissions
+factory_productivity.patches.seed_default_time_slots
 

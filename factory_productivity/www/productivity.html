@@ -54,8 +54,7 @@
         <label>{{ texts['ui.worker_count'] }}<input class="form-control" type="number" min="0" step="1" name="worker_count" required></label>
         <label>{{ texts['ui.ironing_delivery'] }}<input class="form-control" type="number" min="0" step="1" name="ironing_delivery_quantity" required></label>
       </div>
-      <div class="productivity-slots-heading"><h3>{{ texts['ui.time_slots'] }}</h3><button class="btn btn-default" id="add-slot" type="button">{{ texts['ui.add_slot'] }}</button></div>
-      <div id="slot-rows"></div>
+      <div id="slot-rows" class="productivity-slot-grid" aria-label="{{ texts['ui.time_slots'] }}"></div>
       <p class="productivity-total">{{ texts['ui.finished_total'] }}: <strong id="finished-total">0</strong></p>
       <div class="productivity-form-actions"><button class="btn btn-primary" type="submit">{{ texts['ui.save'] }}</button></div>
     </form>

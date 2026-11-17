@@ -325,11 +325,11 @@ def sync_batch(device_id=None, operations=None):
         savepoint = "productivity_" + frappe.generate_hash(length=10)
         frappe.db.savepoint(savepoint)
         try:
-            data = actions[item["action"]](device, item.get("values") or {})
+            data = actions[item["action"]](item.get("values") or {})
             result = {"operation_id": item["operation_id"], "success": True, "data": data}
             frappe.get_doc({"doctype": "Productivity Sync Receipt", "operation_uid": uid,
                             "device": device.name, "target_doctype": data["doctype"],
-                            "target_name": data["name"], "result_json": json.dumps(result, ensure_ascii=False)}).insert(ignore_permissions=True)
+                            "target_name": data["name"], "result_json": json.dumps(result, ensure_ascii=False, default=str)}).insert(ignore_permissions=True)
             results.append(result)
         except frappe.ValidationError as exc:
             frappe.db.rollback(save_point=savepoint)
