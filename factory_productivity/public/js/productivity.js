@@ -141,7 +141,11 @@
 
     async function refresh() {
         updateStatus();
-        if (!state.device_id) { renderList('plans'); renderList('reports'); $('#device-dialog').showModal(); return; }
+        if (!state.device_id) {
+            for (const kind of ['plans', 'reports']) $(`#${kind}-list`).innerHTML = `<div class="productivity-card productivity-empty">${esc(t('ui.device_required'))}</div>`;
+            if (!$('#device-dialog').open) $('#device-dialog').showModal();
+            return;
+        }
         if (navigator.onLine) {
             try { state.bootstrap = await call('bootstrap', { device_id: state.device_id }); persist(); fillMasters(); }
             catch (error) { notice(errorMessage(error), 'danger'); }

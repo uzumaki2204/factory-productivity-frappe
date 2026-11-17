@@ -16,7 +16,7 @@ frappe.pages['productivity-entry'].on_page_load = function (wrapper) {
     if ('serviceWorker' in navigator) {
         const manifest = document.createElement('link');
         manifest.rel = 'manifest';
-        manifest.href = '/productivity.webmanifest';
+        manifest.href = '/assets/factory_productivity/productivity.webmanifest';
         document.head.appendChild(manifest);
         navigator.serviceWorker.register('/productivity-sw.js', { scope: '/app/productivity-entry' }).catch(() => {});
     }
