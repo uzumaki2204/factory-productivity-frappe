@@ -1,6 +1,6 @@
 # Factory Productivity
 
-Independent Frappe 16 app for production plans, per-shift reports and line information. Uses the existing `Company`, `Factory`, `Production Line`, `Line Group`, `Product` and `Factory Device` masters from `factory_management`. If `Time Slot` is absent, the pre-model-sync patch creates it. The mobile-first `/productivity` page has Plans, Reports, and Line Information navigation, including report time slots and filtered history. The former Desk page remains at `/app/productivity-entry`. Both pages use the same offline queue and idempotent sync; the new page uses standard Frappe styling without the .NET theme.
+Independent Frappe 16 app for production plans, per-shift reports and line information. Uses the existing `Company`, `Factory`, `Production Line`, `Line Group`, `Product` and `Factory Device` masters from `factory_management`. If `Time Slot` is absent, the pre-model-sync patch creates it. The mobile-first `/productivity` page has Plans, Reports, and Line Information navigation, including report time slots and filtered history. The report form selects the matching plan for the date and line and shows product codes without product names. The former Desk page remains at `/app/productivity-entry`. Both pages use the same offline queue and idempotent sync; the new page uses standard Frappe styling without the .NET theme.
 
 ## Install and update
 

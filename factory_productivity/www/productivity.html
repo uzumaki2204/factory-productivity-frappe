@@ -44,11 +44,13 @@
     <div class="productivity-section-heading"><h1>{{ texts['ui.reports'] }}</h1><button class="btn btn-primary" id="new-report" type="button">{{ texts['ui.new_report'] }}</button></div>
     <form id="report-form" class="productivity-card" hidden>
       <div class="productivity-form-heading"><h2 id="report-form-title">{{ texts['ui.new_report'] }}</h2><button class="btn btn-default" data-cancel="report" type="button">{{ texts['ui.cancel'] }}</button></div>
-      <div class="productivity-grid">
+      <div id="report-scope" class="productivity-grid" data-single-line="true">
         <label>{{ texts['ui.production_date'] }}<input class="form-control" type="date" name="production_date" required></label>
-        <label>{{ texts['ui.line'] }}<select class="form-control" name="line" required></select></label>
-        <label>{{ texts['ui.production_plan'] }}<select class="form-control" name="production_plan" required></select></label>
-        <label>{{ texts['ui.product'] }}<input class="form-control" name="product_display" readonly></label>
+        <label id="report-line-field" hidden>{{ texts['ui.line'] }}<select class="form-control" name="line" required></select></label>
+      </div>
+      <input type="hidden" name="production_plan" form="report-form">
+      <div id="report-plan-summary" class="productivity-plan-summary" aria-live="polite"></div>
+      <div class="productivity-grid">
         <label>{{ texts['ui.daily_target'] }}<input class="form-control" type="number" min="0" step="1" name="daily_target_quantity" required></label>
         <label>{{ texts['ui.hours'] }}<input class="form-control" type="number" min="0" step="0.01" name="working_hours" required></label>
         <label>{{ texts['ui.worker_count'] }}<input class="form-control" type="number" min="0" step="1" name="worker_count" required></label>

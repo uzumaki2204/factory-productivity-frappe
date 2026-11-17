@@ -15,6 +15,8 @@
     const pages = { plans: { page: 1, total: state.plans.length }, reports: { page: 1, total: state.reports.length } };
     const rows = { plans: state.plans, reports: state.reports };
     let availablePlans = [];
+    let activeReportRow = null;
+    let planRequest = 0;
     let editing = { plan: null, report: null, line: null };
     let syncing = false;
     const refreshSequence = { plans: 0, reports: 0 };
@@ -26,7 +28,7 @@
     const id = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const n = Math.random() * 16 | 0; return (c === 'x' ? n : (n & 3 | 8)).toString(16); }));
     const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
     const allPlans = () => [...state.plans, ...state.operations.filter(o => o.action === 'save_plan').map(o => o.values)];
-    const productName = name => { const p = (state.bootstrap.products || []).find(x => x.name === name); return p ? `${p.product_code || p.name}${p.product_name ? ` · ${p.product_name}` : ''}` : (name || ''); };
+    const productCode = name => { const p = (state.bootstrap.products || []).find(x => x.name === name); return p ? (p.product_code || p.name) : (name || ''); };
     const lineName = name => { const l = (state.bootstrap.lines || []).find(x => x.name === name); return l ? `${l.line_code || l.name}${l.line_name ? ` · ${l.line_name}` : ''}` : (name || ''); };
     const slotName = name => { const s = (state.bootstrap.time_slots || []).find(x => x.name === name); return s ? (s.slot_name || s.name) : (name || ''); };
     const notice = (message, kind = 'info') => { const el = $('#notice'); el.textContent = message; el.className = `alert alert-${kind}`; el.hidden = false; clearTimeout(notice.timer); notice.timer = setTimeout(() => { el.hidden = true; }, 7000); };
@@ -68,8 +70,9 @@
 
     function fillMasters() {
         for (const form of [$('#plan-form'), $('#report-form'), $('#line-info-form')]) options(form.elements.line, state.bootstrap.lines || [], x => lineName(x.name), form.elements.line.value || state.bootstrap.device?.line);
-        options($('#plan-form').elements.product, state.bootstrap.products || [], x => productName(x.name), $('#plan-form').elements.product.value);
-        updatePlanOptions();
+        options($('#plan-form').elements.product, state.bootstrap.products || [], x => productCode(x.name), $('#plan-form').elements.product.value);
+        $('#report-line-field').hidden = (state.bootstrap.lines || []).length <= 1;
+        $('#report-scope').dataset.singleLine = String($('#report-line-field').hidden);
     }
 
     function filterValues(kind) {
@@ -83,7 +86,8 @@
         return source.filter(row => {
             const date = kind === 'plans' ? row.line_start_date : row.production_date;
             const end = kind === 'plans' ? (row.closed_production_date || row.shipment_date) : date;
-            const words = `${row.product || ''} ${productName(row.product)} ${row.line || ''} ${lineName(row.line)}`.toLowerCase();
+            const product = (state.bootstrap.products || []).find(x => x.name === row.product);
+            const words = `${row.product || ''} ${productCode(row.product)} ${product?.product_name || ''} ${row.line || ''} ${lineName(row.line)}`.toLowerCase();
             return (!f.from_date || end >= f.from_date) && (!f.to_date || date <= f.to_date) && (!f.keyword || words.includes(f.keyword.toLowerCase()));
         });
     }
@@ -132,7 +136,7 @@
             const meta = plan ? `${t('ui.line_start_date')}: ${row.line_start_date || ''} · ${t('ui.shipment_date')}: ${row.shipment_date || ''}` : `${t('ui.production_date')}: ${row.production_date || ''} · ${t('ui.finished_total')}: ${total}`;
             const details = plan ? field('ui.planned_quantity', row.planned_quantity) + field('ui.line_start_date', row.line_start_date) + field('ui.shipment_date', row.shipment_date) + field('ui.closed_date', row.closed_production_date || '') : field('ui.daily_target', row.daily_target_quantity) + field('ui.hours', row.working_hours) + field('ui.worker_count', row.worker_count) + field('ui.ironing_delivery', row.ironing_delivery_quantity);
             const buttons = plan ? actionButton('edit-plan', row, 'ui.edit') + actionButton(closed ? 'reopen-plan' : 'finish-plan', row, closed ? 'ui.reopen' : 'ui.finish') + (closed ? actionButton('change-date-plan', row, 'ui.change_closed_date') : '') + actionButton('delete-plan', row, 'ui.delete') : actionButton('detail-report', row, 'ui.detail') + actionButton('edit-report', row, 'ui.edit') + actionButton('delete-report', row, 'ui.delete');
-            return `<details class="productivity-record"><summary><div class="productivity-record-top"><span class="productivity-record-title">${esc(productName(row.product))}</span>${plan ? `<span class="indicator-pill ${closed ? 'gray' : 'green'}">${esc(t(closed ? 'ui.closed' : 'ui.open'))}</span>` : `<strong>${esc(total)}</strong>`}</div><div class="productivity-record-meta"><span>${esc(lineName(row.line))}</span><span>${esc(meta)}</span></div></summary><div class="productivity-record-body"><dl>${details}</dl><div class="productivity-card-actions">${buttons}</div></div></details>`;
+            return `<details class="productivity-record"><summary><div class="productivity-record-top"><span class="productivity-record-title">${esc(productCode(row.product))}</span>${plan ? `<span class="indicator-pill ${closed ? 'gray' : 'green'}">${esc(t(closed ? 'ui.closed' : 'ui.open'))}</span>` : `<strong>${esc(total)}</strong>`}</div><div class="productivity-record-meta"><span>${esc(lineName(row.line))}</span><span>${esc(meta)}</span></div></summary><div class="productivity-record-body"><dl>${details}</dl><div class="productivity-card-actions">${buttons}</div></div></details>`;
         }).join('');
         const pg = pages[kind];
         const count = Math.max(1, Math.ceil(pg.total / 10));
@@ -196,26 +200,50 @@
         form.hidden = false; form.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
+    function renderPlanSummary() {
+        const selected = availablePlans.find(plan => plan.name === $('#report-form').elements.production_plan.value);
+        const summary = $('#report-plan-summary');
+        if (!selected) {
+            summary.textContent = t('ui.no_open_plan');
+            summary.classList.add('text-muted');
+            return;
+        }
+        summary.classList.remove('text-muted');
+        const status = selected.closed_production_date ? 'ui.closed' : 'ui.open';
+        const period = selected.line_start_date && (selected.closed_production_date || selected.shipment_date)
+            ? `<small>${esc(t('ui.plan_period', { from: selected.line_start_date, to: selected.closed_production_date || selected.shipment_date }))}</small>`
+            : '';
+        summary.innerHTML = `<div class="productivity-plan-summary__top"><strong>${esc(productCode(selected.product))}</strong><span class="indicator-pill ${selected.closed_production_date ? 'gray' : 'green'}">${esc(t(status))}</span></div>${period}`;
+    }
+
+    function selectAvailablePlan(preferred) {
+        const selected = availablePlans.find(plan => plan.name === preferred) || availablePlans[0];
+        $('#report-form').elements.production_plan.value = selected?.name || '';
+        renderPlanSummary();
+    }
+
     async function loadAvailablePlans() {
+        const request = ++planRequest;
         const form = $('#report-form');
         const line = form.elements.line.value, day = form.elements.production_date.value;
-        const local = allPlans().filter(p => !p.is_deleted && !p.closed_production_date && p.line === line && p.line_start_date <= day);
+        const original = activeReportRow?.line === line && activeReportRow?.production_date === day ? activeReportRow : null;
+        const preferred = original?.production_plan || form.elements.production_plan.value;
+        const local = allPlans().filter(plan => !plan.is_deleted && !plan.closed_production_date && plan.line === line && plan.line_start_date <= day);
+        if (original && !local.some(plan => plan.name === original.production_plan)) {
+            local.push(allPlans().find(plan => plan.name === original.production_plan) || {
+                name: original.production_plan, product: original.product, line: original.line,
+            });
+        }
         availablePlans = local;
+        selectAvailablePlan(preferred);
         if (state.device_id && navigator.onLine && line && day) {
             try {
                 const remote = await call('open_plans', { device_id: state.device_id, production_date: day, line });
-                availablePlans = [...remote, ...local.filter(p => !remote.some(x => x.name === p.name))];
-            } catch (error) { notice(errorMessage(error), 'danger'); }
+                if (request !== planRequest) return;
+                availablePlans = [...remote, ...local.filter(plan => !remote.some(item => item.name === plan.name))];
+                selectAvailablePlan(preferred);
+            } catch (error) { if (request === planRequest) notice(errorMessage(error), 'danger'); }
         }
-        if (editing.report) { const old = state.reports.find(x => x.name === editing.report) || rows.reports.find(x => x.name === editing.report); if (old && !availablePlans.some(p => p.name === old.production_plan)) availablePlans.push({ name: old.production_plan, product: old.product, line: old.line }); }
-        updatePlanOptions();
-    }
-
-    function updatePlanOptions() {
-        const form = $('#report-form');
-        const selected = form.elements.production_plan.value;
-        options(form.elements.production_plan, availablePlans, x => `${productName(x.product)} · ${lineName(x.line)}`, selected);
-        form.elements.product_display.value = productName(availablePlans.find(x => x.name === form.elements.production_plan.value)?.product || '');
     }
 
     function renderTimeSlots(savedSlots = []) {
@@ -231,13 +259,11 @@
 
     async function beginReport(row = null) {
         if (!state.device_id) return $('#device-dialog').showModal();
-        const form = $('#report-form'); form.reset(); editing.report = row?.name || null;
+        const form = $('#report-form'); form.reset(); editing.report = row?.name || null; activeReportRow = row;
         $('#report-form-title').textContent = t(row ? 'ui.edit_report' : 'ui.new_report');
         form.elements.production_date.value = row?.production_date || today();
         form.elements.line.value = row?.line || state.bootstrap.device?.line || '';
         await loadAvailablePlans();
-        form.elements.production_plan.value = row?.production_plan || '';
-        form.elements.product_display.value = productName(row?.product || availablePlans.find(x => x.name === form.elements.production_plan.value)?.product || '');
         for (const key of ['daily_target_quantity', 'working_hours', 'worker_count', 'ironing_delivery_quantity']) form.elements[key].value = row?.[key] ?? '';
         renderTimeSlots(row?.time_slots || []);
         form.hidden = false; form.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -267,7 +293,7 @@
     function showDetail(row) {
         if (!row) return;
         const total = (row.time_slots || []).reduce((n, x) => n + Number(x.finished_quantity || 0), 0);
-        $('#detail-content').innerHTML = `<dl>${field('ui.production_date', row.production_date)}${field('ui.line', lineName(row.line))}${field('ui.product', productName(row.product))}${field('ui.daily_target', row.daily_target_quantity)}${field('ui.hours', row.working_hours)}${field('ui.worker_count', row.worker_count)}${field('ui.ironing_delivery', row.ironing_delivery_quantity)}${field('ui.finished_total', total)}</dl><h3>${esc(t('ui.time_slots'))}</h3><dl>${(row.time_slots || []).map(x => field('ui.time_slot', `${slotName(x.time_slot)} · ${x.finished_quantity ?? 0}`)).join('')}</dl>`;
+        $('#detail-content').innerHTML = `<dl>${field('ui.production_date', row.production_date)}${field('ui.line', lineName(row.line))}${field('ui.product', productCode(row.product))}${field('ui.daily_target', row.daily_target_quantity)}${field('ui.hours', row.working_hours)}${field('ui.worker_count', row.worker_count)}${field('ui.ironing_delivery', row.ironing_delivery_quantity)}${field('ui.finished_total', total)}</dl><h3>${esc(t('ui.time_slots'))}</h3><dl>${(row.time_slots || []).map(x => field('ui.time_slot', `${slotName(x.time_slot)} · ${x.finished_quantity ?? 0}`)).join('')}</dl>`;
         $('#detail-dialog').showModal();
     }
 
@@ -312,7 +338,6 @@
     });
     $('#report-form').elements.line.addEventListener('change', loadAvailablePlans);
     $('#report-form').elements.production_date.addEventListener('change', loadAvailablePlans);
-    $('#report-form').elements.production_plan.addEventListener('change', () => { const form = $('#report-form'); form.elements.product_display.value = productName(availablePlans.find(x => x.name === form.elements.production_plan.value)?.product || ''); });
     $('#slot-rows').addEventListener('input', updateFinishedTotal);
     $('#report-form').addEventListener('submit', event => {
         event.preventDefault(); const form = event.currentTarget;
