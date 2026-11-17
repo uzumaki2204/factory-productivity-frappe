@@ -36,6 +36,7 @@ body { background: var(--bg-color, #f8f9fa); }
 .productivity-record-body dt { color: var(--text-muted, #6c757d); font-weight: 400; }
 .productivity-record-body dd { text-align: right; margin: 0; }
 .productivity-card-actions { justify-content: flex-start; margin-top: .8rem; }
+.productivity-plan-save, .productivity-plan-action { min-height: 44px; padding-inline: 1rem; font-weight: 600; }
 .productivity-pagination { justify-content: center; margin: 1rem 0; }
 .productivity-empty { text-align: center; padding: 2rem; color: var(--text-muted, #6c757d); }
 .productivity-slot-grid { margin-top: 1rem; border-top: 1px solid var(--border-color, #ddd); }

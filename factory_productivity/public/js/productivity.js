@@ -71,7 +71,8 @@
     function fillMasters() {
         for (const form of [$('#plan-form'), $('#report-form'), $('#line-info-form')]) options(form.elements.line, state.bootstrap.lines || [], x => lineName(x.name), form.elements.line.value || state.bootstrap.device?.line);
         options($('#plan-form').elements.product, state.bootstrap.products || [], x => productCode(x.name), $('#plan-form').elements.product.value);
-        $('#report-line-field').hidden = (state.bootstrap.lines || []).length <= 1;
+        $('#plan-line-field').hidden = (state.bootstrap.lines || []).length === 1;
+        $('#report-line-field').hidden = (state.bootstrap.lines || []).length === 1;
         $('#report-scope').dataset.singleLine = String($('#report-line-field').hidden);
     }
 
@@ -124,7 +125,7 @@
     }
 
     function field(label, value) { return `<dt>${esc(t(label))}</dt><dd>${esc(value ?? '')}</dd>`; }
-    function actionButton(action, row, label, className = 'btn-default') { return `<button class="btn ${className} btn-sm" type="button" data-action="${action}" data-name="${esc(row.name)}">${esc(t(label))}</button>`; }
+    function actionButton(action, row, label, className = 'btn-default', sizeClass = 'btn-sm') { return `<button class="btn ${className} ${sizeClass}" type="button" data-action="${action}" data-name="${esc(row.name)}">${esc(t(label))}</button>`; }
     function renderList(kind) {
         const collection = rows[kind] || [];
         const list = $(`#${kind}-list`);
@@ -135,7 +136,12 @@
             const closed = !!row.closed_production_date;
             const meta = plan ? `${t('ui.line_start_date')}: ${row.line_start_date || ''} · ${t('ui.shipment_date')}: ${row.shipment_date || ''}` : `${t('ui.production_date')}: ${row.production_date || ''} · ${t('ui.finished_total')}: ${total}`;
             const details = plan ? field('ui.planned_quantity', row.planned_quantity) + field('ui.line_start_date', row.line_start_date) + field('ui.shipment_date', row.shipment_date) + field('ui.closed_date', row.closed_production_date || '') : field('ui.daily_target', row.daily_target_quantity) + field('ui.hours', row.working_hours) + field('ui.worker_count', row.worker_count) + field('ui.ironing_delivery', row.ironing_delivery_quantity);
-            const buttons = plan ? actionButton('edit-plan', row, 'ui.edit') + actionButton(closed ? 'reopen-plan' : 'finish-plan', row, closed ? 'ui.reopen' : 'ui.finish') + (closed ? actionButton('change-date-plan', row, 'ui.change_closed_date') : '') + actionButton('delete-plan', row, 'ui.delete') : actionButton('detail-report', row, 'ui.detail') + actionButton('edit-report', row, 'ui.edit') + actionButton('delete-report', row, 'ui.delete');
+            const buttons = plan
+                ? actionButton('edit-plan', row, 'ui.edit', 'btn-primary', 'productivity-plan-action')
+                    + actionButton(closed ? 'reopen-plan' : 'finish-plan', row, closed ? 'ui.reopen' : 'ui.finish', closed ? 'btn-success' : 'btn-warning', 'productivity-plan-action')
+                    + (closed ? actionButton('change-date-plan', row, 'ui.change_closed_date') : '')
+                    + actionButton('delete-plan', row, 'ui.delete', 'btn-danger', 'productivity-plan-action')
+                : actionButton('detail-report', row, 'ui.detail') + actionButton('edit-report', row, 'ui.edit') + actionButton('delete-report', row, 'ui.delete');
             return `<details class="productivity-record"><summary><div class="productivity-record-top"><span class="productivity-record-title">${esc(productCode(row.product))}</span>${plan ? `<span class="indicator-pill ${closed ? 'gray' : 'green'}">${esc(t(closed ? 'ui.closed' : 'ui.open'))}</span>` : `<strong>${esc(total)}</strong>`}</div><div class="productivity-record-meta"><span>${esc(lineName(row.line))}</span><span>${esc(meta)}</span></div></summary><div class="productivity-record-body"><dl>${details}</dl><div class="productivity-card-actions">${buttons}</div></div></details>`;
         }).join('');
         const pg = pages[kind];

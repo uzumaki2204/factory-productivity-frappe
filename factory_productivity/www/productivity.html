@@ -22,14 +22,14 @@
     <div class="productivity-section-heading"><h1>{{ texts['ui.plans'] }}</h1><button class="btn btn-primary" id="new-plan" type="button">{{ texts['ui.new_plan'] }}</button></div>
     <form id="plan-form" class="productivity-card" hidden>
       <div class="productivity-form-heading"><h2 id="plan-form-title">{{ texts['ui.new_plan'] }}</h2><button class="btn btn-default" data-cancel="plan" type="button">{{ texts['ui.cancel'] }}</button></div>
-      <div class="productivity-grid">
-        <label>{{ texts['ui.line'] }}<select class="form-control" name="line" required></select></label>
+      <div id="plan-scope" class="productivity-grid">
+        <label id="plan-line-field" hidden>{{ texts['ui.line'] }}<select class="form-control" name="line" required></select></label>
         <label>{{ texts['ui.product'] }}<select class="form-control" name="product" required></select></label>
         <label>{{ texts['ui.line_start_date'] }}<input class="form-control" type="date" name="line_start_date" required></label>
         <label>{{ texts['ui.shipment_date'] }}<input class="form-control" type="date" name="shipment_date" required></label>
         <label>{{ texts['ui.planned_quantity'] }}<input class="form-control" type="number" min="0" step="1" name="planned_quantity" required></label>
       </div>
-      <div class="productivity-form-actions"><button class="btn btn-primary" type="submit">{{ texts['ui.save'] }}</button></div>
+      <div class="productivity-form-actions"><button class="btn btn-primary productivity-plan-save" type="submit">{{ texts['ui.save_plan'] }}</button></div>
     </form>
     <form id="plans-filter" class="productivity-card productivity-filter">
       <label>{{ texts['ui.from_date'] }}<input class="form-control" type="date" name="from_date"></label>
