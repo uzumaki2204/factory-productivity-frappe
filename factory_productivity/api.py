@@ -228,7 +228,7 @@ def open_plans(device_id=None, production_date=None, line=None):
     filters = {"company": device.company, "factory": device.factory,
                "line": line or ["in", scope_lines(device)], "is_deleted": 0,
                "closed_production_date": ["is", "not set"],
-               "line_start_date": ["<=", day]}
+               "line_start_date": ["<=", day], "shipment_date": [">=", day]}
     return frappe.get_all(PLAN, fields=["name", "line", "product", "line_start_date", "shipment_date"],
                           filters=filters, limit_page_length=200)
 
