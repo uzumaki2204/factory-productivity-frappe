@@ -12,6 +12,8 @@ Kết quả 18/11/2026: 15 test đạt sau khi sửa. Trước sửa, test xác 
 
 Patch `refresh_report_validation` làm mới cache metadata để Pilot chạy migrate nhận bản cập nhật controller; không thay đổi schema hoặc dữ liệu cũ. Báo cáo đã xóa mềm được bỏ qua kiểm tra hiệu lực kế hoạch khi xóa. Kế hoạch hết hiệu lực không còn nằm trong danh sách chọn tạo báo cáo.
 
+Sau khi Pilot cập nhật checkout trực tiếp mà chưa cài lại package, màn hình vẫn ghi phiên bản `0.1.11`. Bản `0.1.13` đóng gói lại mã `0.1.12` để thao tác Update chuẩn của Pilot cài metadata phiên bản và asset; logic nghiệp vụ không đổi trong lần đóng gói này.
+
 Pilot được kiểm tra chỉ đọc và hiện không có báo cáo Productivity. Luồng ghi thực qua Frappe ORM/Data Import cần chạy trên site thử nghiệm riêng khi có site đó; chưa thực hiện trên Pilot sản xuất.
 
 Cập nhật app này trước Dashboard. Phiên bản trước để quay lui là 0.1.11. Các thông báo mới nằm trong i18n.json; rollback không tự thực hiện.
