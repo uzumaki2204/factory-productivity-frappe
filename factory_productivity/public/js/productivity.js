@@ -48,7 +48,20 @@
     };
     const productCode = name => { const p = (state.bootstrap.products || []).find(x => x.name === name); return p ? (p.product_code || p.name) : (name || ''); };
     const lineName = name => { const l = (state.bootstrap.lines || []).find(x => x.name === name); return l ? `${l.line_code || l.name}${l.line_name ? ` · ${l.line_name}` : ''}` : (name || ''); };
-    const slotName = name => { const s = (state.bootstrap.time_slots || []).find(x => x.name === name); return s ? (s.slot_name || s.name) : (name || ''); };
+    const slotTime = value => {
+        const parts = String(value ?? '').match(/^(\d{1,2}):(\d{2})/);
+        return parts ? `${parts[1].padStart(2, '0')}:${parts[2]}` : '';
+    };
+    const slotName = name => {
+        const slot = (state.bootstrap.time_slots || []).find(item => item.name === name);
+        if (!slot) return name || '';
+        const label = slot.slot_name || slot.name;
+        const start = slotTime(slot.start_time), end = slotTime(slot.end_time);
+        if (!start || !end) return label;
+        const plainLabel = label.replace(/\s*\(\s*\d{1,2}:\d{2}\s*[-–—]\s*\d{1,2}:\d{2}\s*\)\s*$/, '').trim();
+        if (plainLabel === label && label.includes(start) && label.includes(end)) return label;
+        return `${plainLabel} (${start}–${end})`;
+    };
     const notice = (message, kind = 'info') => { const el = $('#notice'); el.textContent = message; el.className = `alert alert-${kind}`; el.hidden = false; clearTimeout(notice.timer); notice.timer = setTimeout(() => { el.hidden = true; }, 7000); };
     const errorMessage = error => error?.message || t('ui.operation_failed');
 
@@ -258,12 +271,20 @@
         if (navigator.onLine && retry) sync(); else notice(t('ui.saved_offline'), 'info');
     }
 
+    function continueReport(values, name = values.name) {
+        editing.report = name;
+        activeReportRow = { ...values, name };
+        $('#report-form-title').textContent = t('ui.edit_report');
+    }
+
     async function saveWithConfirmation(action, values, form) {
+        const keepReportOpen = action === 'save_report';
         const dependsOnPendingPlan = action === 'save_report' && state.operations.some(operation => operation.action === 'save_plan' && operation.values.name === values.production_plan);
         const replacesPending = state.operations.some(operation => operation.action === action && operation.values.name === values.name);
         if (!navigator.onLine || dependsOnPendingPlan || replacesPending) {
             queue(action, values);
-            form.hidden = true;
+            if (keepReportOpen) continueReport(values);
+            else form.hidden = true;
             return;
         }
         const button = form.querySelector('button[type="submit"]');
@@ -276,14 +297,16 @@
         } catch (error) {
             if (error.network) {
                 queue(action, values, false);
-                form.hidden = true;
+                if (keepReportOpen) continueReport(values);
+                else form.hidden = true;
             } else notice(errorMessage(error), 'danger');
             return;
         } finally { button.disabled = false; }
         if (!result?.success) return notice(result?.message || t('ui.sync_failed'), 'danger');
         state.failed = state.failed.filter(operation => operation.action !== action || operation.values.name !== values.name);
         persist(); updateStatus();
-        form.hidden = true;
+        if (keepReportOpen) continueReport(values, result.data?.name || values.name);
+        else form.hidden = true;
         notice(t('ok.saved'), 'success');
         await refresh();
     }

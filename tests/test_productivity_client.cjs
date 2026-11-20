@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const root = path.resolve(__dirname, '..');
 const texts = JSON.parse(fs.readFileSync(path.join(root, 'factory_productivity/i18n.json'), 'utf8')).vi;
 const script = fs.readFileSync(path.join(root, 'factory_productivity/public/js/productivity.js'), 'utf8')
-    .replace('updateStatus(); refresh().then(sync);', 'globalThis.appUnderTest = { state, sync, saveWithConfirmation };');
+    .replace('updateStatus(); refresh().then(sync);', 'globalThis.appUnderTest = { state, sync, saveWithConfirmation, slotName, editing };');
 
 function start(initial, reply) {
     const elements = new Map();
@@ -49,7 +49,7 @@ function start(initial, reply) {
     };
     vm.createContext(context);
     vm.runInContext(script, context);
-    return { app: context.appUnderTest, element, storage };
+    return { app: context.appUnderTest, element, storage, navigator: context.navigator };
 }
 
 test('online validation failure keeps the form open and creates no pending record', async () => {
@@ -118,4 +118,55 @@ test('previously rejected operations are migrated out of the queue', () => {
     assert.equal(app.state.failed.length, 1);
     assert.equal(app.state.plans.length, 0);
     assert.equal(JSON.parse(storage.current).operations.length, 0);
+});
+
+test('time slot labels show the configured start and end without duplicating existing hours', () => {
+    const slots = [
+        { name: 'S1', slot_name: 'Ca 1', start_time: '07:30:00', end_time: '09:30:00' },
+        { name: 'S2', slot_name: 'Ca 2 (09:30-11:30)', start_time: '09:30:00', end_time: '11:30:00' },
+        { name: 'S3', slot_name: 'Ca 3', start_time: '', end_time: '' },
+    ];
+    const { app } = start({ device_id: 'DEV', operations: [], plans: [], reports: [], bootstrap: { time_slots: slots } }, () => {});
+    assert.equal(app.slotName('S1'), 'Ca 1 (07:30–09:30)');
+    assert.equal(app.slotName('S2'), 'Ca 2 (09:30–11:30)');
+    assert.equal(app.slotName('S3'), 'Ca 3');
+});
+
+test('saving a report online keeps it open for updates to the same record', async () => {
+    const sentNames = [];
+    const { app, element } = start({ device_id: 'DEV', operations: [], plans: [], reports: [], bootstrap: {} }, (method, options) => {
+        if (method === 'sync_batch') {
+            const operation = JSON.parse(options.body).operations[0];
+            sentNames.push(operation.values.name);
+            return { results: [{ operation_id: operation.operation_id, success: true, data: { name: operation.values.name } }] };
+        }
+        if (method === 'bootstrap') return { device: { line: 'L' }, lines: [], products: [], time_slots: [] };
+        if (method === 'list_plans' || method === 'list_reports') return { items: [], total: 0 };
+        throw new Error(`Unexpected method: ${method}`);
+    });
+    const form = { hidden: false, querySelector: () => ({ disabled: false }) };
+    const report = { name: 'REPORT1', line: 'L', product: 'P', production_date: '2026-11-20', time_slots: [{ time_slot: 'S1', finished_quantity: 10 }] };
+    await app.saveWithConfirmation('save_report', report, form);
+    assert.equal(form.hidden, false);
+    assert.equal(app.editing.report, 'REPORT1');
+    assert.equal(element('#report-form-title').textContent, 'Sửa báo cáo');
+    await app.saveWithConfirmation('save_report', { ...report, time_slots: [{ time_slot: 'S1', finished_quantity: 10 }, { time_slot: 'S2', finished_quantity: 15 }] }, form);
+    assert.deepEqual(sentNames, ['REPORT1', 'REPORT1']);
+    assert.equal(app.state.operations.length, 0);
+});
+
+test('repeated offline report saves update one pending operation and keep the form open', async () => {
+    const { app, navigator } = start({ device_id: 'DEV', operations: [], plans: [], reports: [], bootstrap: {} }, () => {
+        throw new Error('Offline saves must not call the server');
+    });
+    navigator.onLine = false;
+    const form = { hidden: false };
+    const report = { name: 'REPORT1', line: 'L', product: 'P', production_date: '2026-11-20', time_slots: [{ time_slot: 'S1', finished_quantity: 10 }] };
+    await app.saveWithConfirmation('save_report', report, form);
+    assert.equal(form.hidden, false);
+    assert.equal(app.editing.report, 'REPORT1');
+    await app.saveWithConfirmation('save_report', { ...report, time_slots: [{ time_slot: 'S1', finished_quantity: 10 }, { time_slot: 'S2', finished_quantity: 15 }] }, form);
+    assert.equal(app.state.operations.length, 1);
+    assert.equal(app.state.operations[0].values.time_slots[1].finished_quantity, 15);
+    assert.equal(form.hidden, false);
 });
