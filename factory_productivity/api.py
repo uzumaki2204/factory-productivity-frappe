@@ -7,6 +7,7 @@ from datetime import date, datetime, timezone
 import frappe
 from factory_management import device_registry
 from factory_productivity.i18n import catalog, message
+from factory_productivity.merged_scope import repair_scope, resolve_merged_alias, resolve_scope
 from factory_productivity.model import fail
 
 PLAN = "Productivity Production Plan"
@@ -37,23 +38,14 @@ def device_for(device_id):
 
 
 def scope_lines(device):
-    assignments = frappe.get_all(
-        "Line Group Assignment",
-        fields=["line_group"],
-        filters={"line": device.line, "is_active": 1},
-        limit_page_length=20,
-    )
-    lines = {device.line}
-    if len(assignments) == 1:
-        for row in frappe.get_all(
-            "Line Group Assignment",
-            fields=["line"],
-            filters={"line_group": assignments[0].line_group, "is_active": 1},
-            limit_page_length=200,
-        ):
-            if frappe.db.get_value("Production Line", row.line, "factory") == device.factory:
-                lines.add(row.line)
-    return sorted(lines)
+    return resolve_scope(device.company, device.factory, device.line)["line_ids"]
+
+
+def _scope(device, repair=False, commit_get=False):
+    scope = resolve_scope(device.company, device.factory, device.line)
+    if repair and repair_scope(scope) and commit_get:
+        frappe.db.commit()
+    return scope
 
 
 def require_line(device, line):
@@ -87,7 +79,8 @@ def _page(doctype, device, page=1, page_size=50, from_date=None, to_date=None, k
     if start and end and start > end:
         fail("error.date")
 
-    values = {"company": device.company, "factory": device.factory, "lines": tuple(scope_lines(device))}
+    scope = _scope(device, repair=True, commit_get=True)
+    values = {"company": device.company, "factory": device.factory, "lines": tuple(scope["line_ids"])}
     where = ["r.company = %(company)s", "r.factory = %(factory)s", "r.line IN %(lines)s", "r.is_deleted = 0"]
     if doctype == REPORT:
         if start:
@@ -138,7 +131,10 @@ def _save(doctype, device, data):
     data = payload(data)
     if not isinstance(data, dict):
         fail("error.invalid_input")
+    scope = _scope(device, repair=True)
     name = str(data.get("name") or "").strip()
+    if name and frappe.db.exists(doctype, name) and frappe.db.get_value(doctype, name, "is_deleted"):
+        name = resolve_merged_alias(doctype, name, scope) or name
     if name and frappe.db.exists(doctype, name):
         doc = scoped_record(doctype, name, device)
         if doc.is_deleted:
@@ -151,7 +147,10 @@ def _save(doctype, device, data):
             except (TypeError, ValueError):
                 fail("error.invalid_input")
     line = data.get("line") or device.line
-    require_line(device, line)
+    if line not in scope["line_ids"]:
+        fail("error.line_scope", frappe.PermissionError)
+    if scope["is_merged_scope"]:
+        line = scope["canonical_line"]
     for key in ("company", "factory", "is_deleted", "legacy_id", "device"):
         data.pop(key, None)
     if doctype == PLAN:
@@ -167,12 +166,19 @@ def _save(doctype, device, data):
     doc.company = device.company
     doc.factory = device.factory
     doc.line = line
+    if scope["is_merged_scope"] and doctype in (PLAN, REPORT):
+        doc.line_group = scope["line_group"]
     if doctype in (REPORT, LINE_INFO):
         doc.device = device.name
     if doctype == REPORT:
+        plan_name = doc.production_plan
+        if frappe.db.exists(PLAN, plan_name) and frappe.db.get_value(PLAN, plan_name, "is_deleted"):
+            doc.production_plan = resolve_merged_alias(PLAN, plan_name, scope) or plan_name
         plan = scoped_record(PLAN, doc.production_plan, device)
         if plan.is_deleted:
             fail("error.plan_missing")
+        if scope["is_merged_scope"]:
+            doc.product = plan.product
         original_plan = None if doc.is_new() else frappe.db.get_value(REPORT, doc.name, "production_plan")
         if plan.closed_production_date and doc.production_plan != original_plan:
             fail("error.plan_closed")
@@ -193,16 +199,19 @@ def translations(lang="vi"):
 @frappe.whitelist(allow_guest=True, methods=["POST"])
 def check_device(device_id=None):
     device = device_for(device_id)
+    scope = _scope(device)
     return {
         "id": device.name, "name": device.device_name, "company": device.company,
-        "factory": device.factory, "line": device.line, "scope_lines": scope_lines(device),
+        "factory": device.factory, "line": device.line, "scope_lines": scope["line_ids"],
+        "canonical_line": scope["canonical_line"], "is_merged_scope": scope["is_merged_scope"],
     }
 
 
 @frappe.whitelist(allow_guest=True, methods=["GET"])
 def bootstrap(device_id=None):
     device = device_for(device_id)
-    lines = scope_lines(device)
+    scope = _scope(device, repair=True, commit_get=True)
+    lines = scope["line_ids"]
     return {
         "device": check_device(device_id),
         "lines": frappe.get_all("Production Line", fields=["name", "line_code", "line_name"], filters={"name": ["in", lines]}, limit_page_length=200),
@@ -219,14 +228,17 @@ def list_plans(device_id=None, page=1, page_size=50, from_date=None, to_date=Non
 @frappe.whitelist(allow_guest=True, methods=["GET"])
 def open_plans(device_id=None, production_date=None, line=None):
     device = device_for(device_id)
-    if line:
-        require_line(device, line)
+    scope = _scope(device, repair=True, commit_get=True)
+    if line and line not in scope["line_ids"]:
+        fail("error.line_scope", frappe.PermissionError)
+    if scope["is_merged_scope"]:
+        line = scope["canonical_line"]
     try:
         day = date.fromisoformat(str(production_date))
     except ValueError:
         fail("error.date")
     filters = {"company": device.company, "factory": device.factory,
-               "line": line or ["in", scope_lines(device)], "is_deleted": 0,
+               "line": line or ["in", scope["line_ids"]], "is_deleted": 0,
                "closed_production_date": ["is", "not set"],
                "line_start_date": ["<=", day], "shipment_date": [">=", day]}
     return frappe.get_all(PLAN, fields=["name", "line", "product", "line_start_date", "shipment_date"],
@@ -241,8 +253,12 @@ def list_reports(device_id=None, page=1, page_size=50, from_date=None, to_date=N
 @frappe.whitelist(allow_guest=True, methods=["GET"])
 def current_line_info(device_id=None, line=None):
     device = device_for(device_id)
+    scope = _scope(device, repair=True, commit_get=True)
     line = line or device.line
-    require_line(device, line)
+    if line not in scope["line_ids"]:
+        fail("error.line_scope", frappe.PermissionError)
+    if scope["is_merged_scope"]:
+        line = scope["canonical_line"]
     names = frappe.get_all(LINE_INFO, fields=["name"], filters={"line": line, "is_deleted": 0},
                            order_by="modified desc", page_length=1)
     return frappe.get_doc(LINE_INFO, names[0].name).as_dict() if names else None
@@ -294,7 +310,7 @@ def delete_report(device_id=None, name=None):
 @frappe.whitelist(allow_guest=True, methods=["GET"])
 def sync_state(device_id=None):
     device = device_for(device_id)
-    lines = scope_lines(device)
+    lines = _scope(device, repair=True, commit_get=True)["line_ids"]
     versions = {}
     for key, doctype in (("plan", PLAN), ("report", REPORT), ("line_info", LINE_INFO)):
         rows = frappe.get_all(doctype, fields=["modified"], filters={"company": device.company, "line": ["in", lines]},

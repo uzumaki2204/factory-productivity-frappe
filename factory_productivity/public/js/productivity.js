@@ -48,6 +48,14 @@
     };
     const productCode = name => { const p = (state.bootstrap.products || []).find(x => x.name === name); return p ? (p.product_code || p.name) : (name || ''); };
     const lineName = name => { const l = (state.bootstrap.lines || []).find(x => x.name === name); return l ? `${l.line_code || l.name}${l.line_name ? ` · ${l.line_name}` : ''}` : (name || ''); };
+    const mergedScope = () => !!state.bootstrap.device?.is_merged_scope;
+    const canonicalLine = () => state.bootstrap.device?.canonical_line || state.bootstrap.device?.line || '';
+    const selectedLine = line => mergedScope() ? canonicalLine() : (line || state.bootstrap.device?.line || '');
+    const sameScopeLine = (left, right) => left === right || (mergedScope() && (state.bootstrap.device?.scope_lines || []).includes(left) && (state.bootstrap.device?.scope_lines || []).includes(right));
+    const scopeLabel = () => mergedScope()
+        ? (state.bootstrap.device?.scope_lines || []).map(id => { const line = (state.bootstrap.lines || []).find(item => item.name === id); return line?.line_name || line?.line_code || id; }).join(' + ')
+        : lineName(state.bootstrap.device?.line);
+    const recordLineName = line => mergedScope() && (state.bootstrap.device?.scope_lines || []).includes(line) ? scopeLabel() : lineName(line);
     const slotTime = value => {
         const parts = String(value ?? '').match(/^(\d{1,2}):(\d{2})/);
         return parts ? `${parts[1].padStart(2, '0')}:${parts[2]}` : '';
@@ -101,6 +109,8 @@
         $('#device-form').hidden = active;
         $('#device-name-value').textContent = name || t('ui.device_name_unknown');
         $('#device-id-value').textContent = state.device_id;
+        $('#device-line-value').textContent = lineName(state.bootstrap.device?.line) || t('ui.not_available');
+        $('#device-scope-value').textContent = scopeLabel() || t('ui.not_available');
         $('#device-id').value = active ? state.device_id : '';
     }
 
@@ -124,10 +134,16 @@
     }
 
     function fillMasters() {
-        for (const form of [$('#plan-form'), $('#report-form'), $('#line-info-form')]) options(form.elements.line, state.bootstrap.lines || [], x => lineName(x.name), form.elements.line.value || state.bootstrap.device?.line);
+        const lines = mergedScope() ? (state.bootstrap.lines || []).filter(row => row.name === canonicalLine()) : (state.bootstrap.lines || []);
+        for (const form of [$('#plan-form'), $('#report-form'), $('#line-info-form')]) options(form.elements.line, lines, x => mergedScope() ? scopeLabel() : lineName(x.name), selectedLine(form.elements.line.value));
         updatePlanProductPicker();
-        $('#plan-line-field').hidden = (state.bootstrap.lines || []).length === 1;
-        $('#report-line-field').hidden = (state.bootstrap.lines || []).length === 1;
+        $('#plan-line-field').hidden = lines.length === 1;
+        $('#report-line-field').hidden = lines.length === 1;
+        for (const name of ['plan', 'report']) {
+            const label = $(`#${name}-scope-label`);
+            label.hidden = !mergedScope();
+            label.textContent = `${t('ui.line_scope')}: ${scopeLabel()}`;
+        }
         $('#report-scope').dataset.singleLine = String($('#report-line-field').hidden);
         if ($('#plan-product-dialog').open) renderPlanProductPicker();
     }
@@ -161,7 +177,7 @@
             const date = kind === 'plans' ? row.line_start_date : row.production_date;
             const end = kind === 'plans' ? (row.closed_production_date || row.shipment_date) : date;
             const product = (state.bootstrap.products || []).find(x => x.name === row.product);
-            const words = `${row.product || ''} ${productCode(row.product)} ${product?.product_name || ''} ${row.line || ''} ${lineName(row.line)}`.toLowerCase();
+            const words = `${row.product || ''} ${productCode(row.product)} ${product?.product_name || ''} ${row.line || ''} ${recordLineName(row.line)}`.toLowerCase();
             return (!f.from_date || end >= f.from_date) && (!f.to_date || date <= f.to_date) && (!f.keyword || words.includes(f.keyword.toLowerCase()));
         });
     }
@@ -221,7 +237,7 @@
                     + (closed ? actionButton('change-date-plan', row, 'ui.change_closed_date') : '')
                     + actionButton('delete-plan', row, 'ui.delete', 'btn-danger', 'productivity-plan-action')
                 : actionButton('detail-report', row, 'ui.detail') + actionButton('edit-report', row, 'ui.edit') + actionButton('delete-report', row, 'ui.delete');
-            return `<details class="productivity-record"><summary><div class="productivity-record-top"><span class="productivity-record-title">${esc(productCode(row.product))}</span>${status || (plan ? `<span class="indicator-pill ${closed ? 'gray' : 'green'}">${esc(t(closed ? 'ui.closed' : 'ui.open'))}</span>` : `<strong>${esc(total)}</strong>`)}</div><div class="productivity-record-meta"><span>${esc(lineName(row.line))}</span><span>${esc(meta)}</span></div></summary><div class="productivity-record-body"><dl>${details}</dl><div class="productivity-card-actions">${buttons}</div></div></details>`;
+            return `<details class="productivity-record"><summary><div class="productivity-record-top"><span class="productivity-record-title">${esc(productCode(row.product))}</span>${status || (plan ? `<span class="indicator-pill ${closed ? 'gray' : 'green'}">${esc(t(closed ? 'ui.closed' : 'ui.open'))}</span>` : `<strong>${esc(total)}</strong>`)}</div><div class="productivity-record-meta"><span>${esc(recordLineName(row.line))}</span><span>${esc(meta)}</span></div></summary><div class="productivity-record-body"><dl>${details}</dl><div class="productivity-card-actions">${buttons}</div></div></details>`;
         }).join('');
         const pg = pages[kind];
         const count = Math.max(1, Math.ceil(pg.total / 10));
@@ -329,7 +345,7 @@
         if (!state.device_id) return $('#device-dialog').showModal();
         const form = $('#plan-form'); form.reset(); editing.plan = row?.name || null;
         $('#plan-form-title').textContent = t(row ? 'ui.edit_plan' : 'ui.new_plan');
-        form.elements.line.value = row?.line || state.bootstrap.device?.line || '';
+        form.elements.line.value = selectedLine(row?.line);
         form.elements.product.value = row?.product || '';
         $('#plan-product-picker-button').removeAttribute('aria-invalid');
         updatePlanProductPicker();
@@ -365,9 +381,9 @@
         const request = ++planRequest;
         const form = $('#report-form');
         const line = form.elements.line.value, day = form.elements.production_date.value;
-        const original = activeReportRow?.line === line && activeReportRow?.production_date === day ? activeReportRow : null;
+        const original = sameScopeLine(activeReportRow?.line, line) && activeReportRow?.production_date === day ? activeReportRow : null;
         const preferred = original?.production_plan || form.elements.production_plan.value;
-        const local = allPlans().filter(plan => !plan.is_deleted && !plan.closed_production_date && plan.line === line && plan.line_start_date <= day && plan.shipment_date >= day);
+        const local = allPlans().filter(plan => !plan.is_deleted && !plan.closed_production_date && sameScopeLine(plan.line, line) && plan.line_start_date <= day && plan.shipment_date >= day);
         if (original && !local.some(plan => plan.name === original.production_plan)) {
             local.push(allPlans().find(plan => plan.name === original.production_plan) || {
                 name: original.production_plan, product: original.product, line: original.line,
@@ -401,7 +417,7 @@
         const form = $('#report-form'); form.reset(); editing.report = row?.name || null; activeReportRow = row;
         $('#report-form-title').textContent = t(row ? 'ui.edit_report' : 'ui.new_report');
         form.elements.production_date.value = row?.production_date || today();
-        form.elements.line.value = row?.line || state.bootstrap.device?.line || '';
+        form.elements.line.value = selectedLine(row?.line);
         await loadAvailablePlans();
         for (const key of ['daily_target_quantity', 'working_hours', 'worker_count', 'ironing_delivery_quantity']) form.elements[key].value = row?.[key] ?? '';
         renderTimeSlots(row?.time_slots || []);
@@ -411,8 +427,8 @@
 
     async function loadLineInfo() {
         if (!state.device_id) return;
-        const form = $('#line-info-form'), line = form.elements.line.value || state.bootstrap.device?.line;
-        const pending = [...state.operations].reverse().find(op => op.action === 'save_line_info' && op.values?.line === line);
+        const form = $('#line-info-form'), line = selectedLine(form.elements.line.value);
+        const pending = [...state.operations].reverse().find(op => op.action === 'save_line_info' && sameScopeLine(op.values?.line, line));
         if (pending) {
             editing.line = pending.values.name;
             form.elements.line_leader_name.value = pending.values.line_leader_name || '';
@@ -432,7 +448,7 @@
     function showDetail(row) {
         if (!row) return;
         const total = (row.time_slots || []).reduce((n, x) => n + Number(x.finished_quantity || 0), 0);
-        $('#detail-content').innerHTML = `<dl>${field('ui.production_date', row.production_date)}${field('ui.line', lineName(row.line))}${field('ui.product', productCode(row.product))}${field('ui.daily_target', row.daily_target_quantity)}${field('ui.hours', row.working_hours)}${field('ui.worker_count', row.worker_count)}${field('ui.ironing_delivery', row.ironing_delivery_quantity)}${field('ui.finished_total', total)}</dl><h3>${esc(t('ui.time_slots'))}</h3><dl>${(row.time_slots || []).map(x => field('ui.time_slot', `${slotName(x.time_slot)} · ${x.finished_quantity ?? 0}`)).join('')}</dl>`;
+        $('#detail-content').innerHTML = `<dl>${field('ui.production_date', row.production_date)}${field('ui.line', recordLineName(row.line))}${field('ui.product', productCode(row.product))}${field('ui.daily_target', row.daily_target_quantity)}${field('ui.hours', row.working_hours)}${field('ui.worker_count', row.worker_count)}${field('ui.ironing_delivery', row.ironing_delivery_quantity)}${field('ui.finished_total', total)}</dl><h3>${esc(t('ui.time_slots'))}</h3><dl>${(row.time_slots || []).map(x => field('ui.time_slot', `${slotName(x.time_slot)} · ${x.finished_quantity ?? 0}`)).join('')}</dl>`;
         $('#detail-dialog').showModal();
     }
 
@@ -544,8 +560,12 @@
             return notice(t('error.plan_date_order'), 'danger');
         }
         const values = { name: editing.plan || id(), line: form.elements.line.value, product: form.elements.product.value, line_start_date: form.elements.line_start_date.value, shipment_date: form.elements.shipment_date.value, planned_quantity: Number(form.elements.planned_quantity.value) };
-        if (allPlans().some(plan => plan.name !== values.name && plan.line === values.line && !plan.is_deleted && !plan.closed_production_date)) {
-            return notice(t('error.open_plan'), 'danger');
+        const conflictingPlan = allPlans().some(plan => plan.name !== values.name && sameScopeLine(plan.line, values.line)
+            && !plan.is_deleted && (mergedScope()
+                ? plan.line_start_date <= values.shipment_date && (plan.closed_production_date || plan.shipment_date) >= values.line_start_date
+                : !plan.closed_production_date));
+        if (conflictingPlan) {
+            return notice(t(mergedScope() ? 'error.overlapping_plan' : 'error.open_plan'), 'danger');
         }
         await saveWithConfirmation('save_plan', values, form);
     });

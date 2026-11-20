@@ -23,7 +23,20 @@ class ProductivityProductionPlan(Document):
             fail("error.date")
         if line_start_date > shipment_date:
             fail("error.plan_date_order")
-        if not self.is_deleted and not self.closed_production_date:
+        if not self.is_deleted and self.line_group:
+            existing = frappe.db.sql(
+                """SELECT name FROM `tabProductivity Production Plan`
+                   WHERE company = %s AND factory = %s AND line = %s
+                     AND is_deleted = 0 AND name != %s
+                     AND line_start_date <= %s
+                     AND COALESCE(closed_production_date, shipment_date) >= %s
+                   LIMIT 1""",
+                (self.company, self.factory, self.line, self.name or "",
+                 self.closed_production_date or self.shipment_date, self.line_start_date),
+            )
+            if existing:
+                fail("error.overlapping_plan")
+        elif not self.is_deleted and not self.closed_production_date:
             existing = frappe.db.get_value(
                 self.doctype,
                 {"company": self.company, "factory": self.factory, "line": self.line, "is_deleted": 0, "closed_production_date": ["is", "not set"]},
