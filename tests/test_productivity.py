@@ -34,6 +34,7 @@ from factory_productivity.factory_productivity.doctype.productivity_report.produ
 
 class ProductivityTests(unittest.TestCase):
     def setUp(self):
+        frappe.local.pop('productivity_lang', None)
         frappe.db = MagicMock()
         frappe.db.exists.side_effect = lambda dt, name: dt in ('Productivity Production Plan','Product')
         frappe.db.get_value.side_effect = self.get_value
@@ -79,6 +80,21 @@ class ProductivityTests(unittest.TestCase):
         finally:
             frappe.local.lang = 'vi'
             frappe.local.pop('request', None)
+
+    def test_sync_rejection_uses_explicit_page_language(self):
+        from factory_productivity.model import fail
+        frappe.local.lang = 'en'
+        operation = {'operation_id': 'op1', 'action': 'save_plan', 'values': {'name': 'P1'}}
+        try:
+            with patch.object(api, 'device_for', return_value=Row(name='DEV')), patch.object(api, '_save', side_effect=lambda *_: fail('error.open_plan')), patch.object(frappe, 'generate_hash', return_value='1234567890', create=True):
+                result = api.sync_batch('DEV', [operation], lang='vi')
+            self.assertEqual(1, len(result['results']))
+            self.assertFalse(result['results'][0]['success'])
+            self.assertEqual('Chuyền đã có kế hoạch đang mở.', result['results'][0]['message'])
+            frappe.db.rollback.assert_called_once()
+        finally:
+            frappe.local.lang = 'vi'
+            frappe.local.pop('productivity_lang', None)
 
     def test_report_requires_at_least_one_time_slot_like_dotnet(self):
         self.doc.time_slots=[]

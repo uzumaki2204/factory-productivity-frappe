@@ -9,6 +9,7 @@
     <div class="productivity-header-actions">
       <span id="connection-status" class="indicator-pill" role="status" aria-live="polite"></span>
       <button id="sync-button" class="btn btn-default btn-sm" type="button">{{ texts['ui.sync'] }} <span id="pending-count"></span></button>
+      <button id="failed-button" class="btn btn-default btn-sm" type="button" hidden></button>
       <button id="device-button" class="btn btn-default btn-sm" type="button">{{ texts['ui.device'] }}</button>
     </div>
   </header>
@@ -97,6 +98,7 @@
   <form id="device-form"><label>{{ texts['ui.device'] }}<input id="device-id" class="form-control" name="device_id" autocomplete="off" required></label><button class="btn btn-primary mt-3" type="submit">{{ texts['ui.activate'] }}</button></form>
 </dialog>
 <dialog id="detail-dialog" class="productivity-dialog" aria-labelledby="detail-title"><div class="productivity-dialog-heading"><h2 id="detail-title">{{ texts['ui.report_detail'] }}</h2><button class="btn btn-default" data-close-dialog type="button">{{ texts['ui.close'] }}</button></div><div id="detail-content"></div></dialog>
+<dialog id="failed-dialog" class="productivity-dialog" aria-labelledby="failed-title"><div class="productivity-dialog-heading"><h2 id="failed-title">{{ texts['ui.failed_drafts_title'] }}</h2><button class="btn btn-default" data-close-dialog type="button">{{ texts['ui.close'] }}</button></div><div id="failed-drafts-list" class="productivity-list"></div></dialog>
 <script id="productivity-texts" type="application/json">{{ texts_json | safe }}</script>
 <script src="/assets/factory_productivity/js/productivity.js?v={{ asset_version }}" defer></script>
 {% endblock %}

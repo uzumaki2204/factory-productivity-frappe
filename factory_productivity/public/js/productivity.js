@@ -4,11 +4,12 @@
     if (!root) return;
     const texts = JSON.parse(document.getElementById('productivity-texts').textContent);
     const storageKey = 'factory_productivity_offline_v1';
-    const blank = { device_id: '', operations: [], plans: [], reports: [], bootstrap: {} };
+    const blank = { device_id: '', operations: [], failed: [], plans: [], reports: [], bootstrap: {} };
     let state;
     try { state = { ...blank, ...JSON.parse(localStorage.getItem(storageKey) || '{}') }; }
     catch (_) { state = { ...blank }; }
     if (!Array.isArray(state.operations)) state.operations = [];
+    if (!Array.isArray(state.failed)) state.failed = [];
     if (!Array.isArray(state.plans)) state.plans = [];
     if (!Array.isArray(state.reports)) state.reports = [];
     if (!state.bootstrap || typeof state.bootstrap !== 'object') state.bootstrap = {};
@@ -25,13 +26,23 @@
     const t = (key, values = {}) => (texts[key] || key).replace(/\{(\w+)\}/g, (_, name) => String(values[name] ?? ''));
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
     const persist = () => localStorage.setItem(storageKey, JSON.stringify(state));
+    const previouslyRejected = state.operations.filter(operation => operation.failed_message);
+    if (previouslyRejected.length) {
+        state.failed.push(...previouslyRejected);
+        state.operations = state.operations.filter(operation => !operation.failed_message);
+        for (const operation of previouslyRejected) {
+            const kind = operation.action === 'save_plan' ? 'plans' : operation.action === 'save_report' ? 'reports' : null;
+            if (kind) state[kind] = state[kind].filter(row => row.name !== operation.values.name);
+        }
+        persist();
+    }
     const id = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const n = Math.random() * 16 | 0; return (c === 'x' ? n : (n & 3 | 8)).toString(16); }));
     const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
     const allPlans = () => {
         const plans = new Map(state.plans.map(plan => [plan.name, plan]));
+        state.failed.filter(operation => operation.action === 'save_plan').forEach(operation => plans.delete(operation.values.name));
         state.operations.filter(o => o.action === 'save_plan').forEach(operation => {
-            if (operation.failed_message) plans.delete(operation.values.name);
-            else plans.set(operation.values.name, operation.values);
+            plans.set(operation.values.name, operation.values);
         });
         return [...plans.values()];
     };
@@ -46,7 +57,7 @@
         if (!post) for (const [key, value] of Object.entries(args)) if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, value);
         let response;
         try { response = await fetch(url, { method: post ? 'POST' : 'GET', credentials: 'omit', cache: 'no-store', headers: { ...(post ? { 'Content-Type': 'application/json' } : {}), 'X-Productivity-Lang': root.dataset.lang || 'vi' }, body: post ? JSON.stringify(args) : undefined }); }
-        catch (_) { throw new Error(t('ui.offline')); }
+        catch (_) { const error = new Error(t('ui.offline')); error.network = true; throw error; }
         let payload;
         try { payload = await response.json(); } catch (_) { throw new Error(t('ui.operation_failed')); }
         if (!response.ok || payload.exc) {
@@ -61,16 +72,23 @@
         const online = navigator.onLine;
         $('#connection-status').textContent = t(online ? 'ui.online' : 'ui.offline');
         $('#connection-status').className = `indicator-pill ${online ? 'green' : 'orange'}`;
-        const pending = state.operations.filter(operation => !operation.failed_message).length;
-        const failed = state.operations.length - pending;
-        const counts = [pending && `${pending} ${t('ui.pending_label')}`, failed && `${failed} ${t('ui.failed_label')}`].filter(Boolean);
-        $('#pending-count').textContent = counts.length ? `(${counts.join(', ')})` : '';
+        $('#pending-count').textContent = state.operations.length ? `(${state.operations.length} ${t('ui.pending_label')})` : '';
+        $('#failed-button').hidden = !state.failed.length;
+        $('#failed-button').textContent = t('ui.failed_drafts', { count: state.failed.length });
+    }
+
+    function renderFailedDrafts() {
+        $('#failed-drafts-list').innerHTML = state.failed.map((operation, index) => {
+            const kind = operation.action === 'save_plan' ? 'ui.plans' : operation.action === 'save_report' ? 'ui.reports' : 'ui.line_info';
+            const title = operation.values.product ? productCode(operation.values.product) : lineName(operation.values.line);
+            return `<div class="productivity-failed-draft"><strong>${esc(t(kind))} · ${esc(title)}</strong><p>${esc(operation.failed_message || t('ui.sync_failed'))}</p><div class="productivity-card-actions"><button class="btn btn-primary btn-sm" type="button" data-failed-index="${index}">${esc(t('ui.edit'))}</button><button class="btn btn-default btn-sm" type="button" data-discard-index="${index}">${esc(t('ui.discard_draft'))}</button></div></div>`;
+        }).join('');
     }
 
     function setView(view) {
         $$('.productivity-view').forEach(el => { el.hidden = el.id !== `${view}-view`; });
         $$('.productivity-nav-button').forEach(el => { const selected = el.dataset.view === view; el.classList.toggle('active', selected); el.setAttribute('aria-current', selected ? 'page' : 'false'); });
-        if (view === 'line-info') loadLineInfo();
+        if (view === 'line-info') return loadLineInfo();
     }
 
     function options(target, collection, label, selected) {
@@ -165,7 +183,7 @@
         else list.innerHTML = collection.map(row => {
             const plan = kind === 'plans';
             const pending = [...state.operations].reverse().find(o => o.action === (plan ? 'save_plan' : 'save_report') && o.values.name === row.name);
-            const status = pending ? `<span class="indicator-pill ${pending.failed_message ? 'red' : 'orange'}">${esc(pending.failed_message ? t('ui.sync_rejected', { reason: pending.failed_message }) : t('ui.awaiting_sync'))}</span>` : '';
+            const status = pending ? `<span class="indicator-pill orange">${esc(t('ui.awaiting_sync'))}</span>` : '';
             const total = (row.time_slots || []).reduce((n, x) => n + Number(x.finished_quantity || 0), 0);
             const closed = !!row.closed_production_date;
             const meta = plan ? `${t('ui.line_start_date')}: ${row.line_start_date || ''} · ${t('ui.shipment_date')}: ${row.shipment_date || ''}` : `${t('ui.production_date')}: ${row.production_date || ''} · ${t('ui.finished_total')}: ${total}`;
@@ -197,16 +215,22 @@
         await Promise.all([loadList('plans'), loadList('reports')]);
     }
 
-    async function sync(retryFailed = false) {
-        const pending = state.operations.filter(operation => retryFailed || !operation.failed_message);
-        if (syncing || !pending.length || !state.device_id || !navigator.onLine) return;
+    async function sync() {
+        if (syncing || !state.operations.length || !state.device_id || !navigator.onLine) return;
         syncing = true;
         try {
-            const response = await call('sync_batch', { device_id: state.device_id, operations: pending }, true);
+            const pending = [...state.operations];
+            const response = await call('sync_batch', { device_id: state.device_id, operations: pending, lang: root.dataset.lang || 'vi' }, true);
             const done = new Set((response.results || []).filter(x => x.success).map(x => x.operation_id));
             const rejected = new Map((response.results || []).filter(x => !x.success).map(x => [x.operation_id, x.message || t('ui.sync_failed')]));
-            state.operations = state.operations.filter(x => !done.has(x.operation_id));
-            state.operations.forEach(operation => { if (rejected.has(operation.operation_id)) operation.failed_message = rejected.get(operation.operation_id); });
+            state.operations = state.operations.filter(operation => !done.has(operation.operation_id) && !rejected.has(operation.operation_id));
+            for (const operation of pending.filter(item => rejected.has(item.operation_id))) {
+                operation.failed_message = rejected.get(operation.operation_id);
+                state.failed = state.failed.filter(item => item.action !== operation.action || item.values.name !== operation.values.name);
+                state.failed.push(operation);
+                const kind = operation.action === 'save_plan' ? 'plans' : operation.action === 'save_report' ? 'reports' : null;
+                if (kind) state[kind] = state[kind].filter(row => row.name !== operation.values.name);
+            }
             persist(); updateStatus();
             const failed = (response.results || []).find(x => !x.success);
             if (failed) notice(t('ui.sync_rejected', { reason: failed.message || t('ui.sync_failed') }), 'danger');
@@ -216,8 +240,9 @@
         finally { syncing = false; }
     }
 
-    function queue(action, values) {
+    function queue(action, values, retry = true) {
         values.name = values.name || id();
+        state.failed = state.failed.filter(operation => operation.action !== action || operation.values.name !== values.name);
         state.operations = state.operations.filter(o => o.action !== action || o.values.name !== values.name);
         state.operations.push({ operation_id: id(), action, values });
         const kind = action === 'save_plan' ? 'plans' : action === 'save_report' ? 'reports' : null;
@@ -230,7 +255,37 @@
             renderList(kind);
         }
         persist(); updateStatus();
-        if (navigator.onLine) sync(); else notice(t('ui.saved_offline'), 'info');
+        if (navigator.onLine && retry) sync(); else notice(t('ui.saved_offline'), 'info');
+    }
+
+    async function saveWithConfirmation(action, values, form) {
+        const dependsOnPendingPlan = action === 'save_report' && state.operations.some(operation => operation.action === 'save_plan' && operation.values.name === values.production_plan);
+        const replacesPending = state.operations.some(operation => operation.action === action && operation.values.name === values.name);
+        if (!navigator.onLine || dependsOnPendingPlan || replacesPending) {
+            queue(action, values);
+            form.hidden = true;
+            return;
+        }
+        const button = form.querySelector('button[type="submit"]');
+        button.disabled = true;
+        let result;
+        try {
+            const operation = { operation_id: id(), action, values };
+            const response = await call('sync_batch', { device_id: state.device_id, operations: [operation], lang: root.dataset.lang || 'vi' }, true);
+            result = (response.results || []).find(item => item.operation_id === operation.operation_id);
+        } catch (error) {
+            if (error.network) {
+                queue(action, values, false);
+                form.hidden = true;
+            } else notice(errorMessage(error), 'danger');
+            return;
+        } finally { button.disabled = false; }
+        if (!result?.success) return notice(result?.message || t('ui.sync_failed'), 'danger');
+        state.failed = state.failed.filter(operation => operation.action !== action || operation.values.name !== values.name);
+        persist(); updateStatus();
+        form.hidden = true;
+        notice(t('ok.saved'), 'success');
+        await refresh();
     }
 
     function beginPlan(row = null) {
@@ -374,7 +429,32 @@
             state.device_id = device.id; persist(); $('#device-dialog').close(); await refresh(); await sync();
         } catch (error) { notice(errorMessage(error), 'danger'); }
     });
-    $('#sync-button').addEventListener('click', () => sync(true));
+    $('#sync-button').addEventListener('click', sync);
+    $('#failed-button').addEventListener('click', () => { renderFailedDrafts(); $('#failed-dialog').showModal(); });
+    $('#failed-drafts-list').addEventListener('click', async event => {
+        const discard = event.target.closest('[data-discard-index]');
+        if (discard) {
+            state.failed.splice(Number(discard.dataset.discardIndex), 1);
+            persist(); updateStatus(); renderFailedDrafts();
+            if (!state.failed.length) $('#failed-dialog').close();
+            return;
+        }
+        const button = event.target.closest('[data-failed-index]');
+        if (!button) return;
+        const operation = state.failed[Number(button.dataset.failedIndex)];
+        if (!operation) return;
+        $('#failed-dialog').close();
+        if (operation.action === 'save_plan') { setView('plans'); beginPlan(operation.values); }
+        else if (operation.action === 'save_report') { setView('reports'); await beginReport(operation.values); }
+        else {
+            await setView('line-info');
+            const form = $('#line-info-form');
+            editing.line = operation.values.name;
+            form.elements.line.value = operation.values.line;
+            form.elements.line_leader_name.value = operation.values.line_leader_name || '';
+            form.elements.technical_leader_name.value = operation.values.technical_leader_name || '';
+        }
+    });
     $('#new-plan').addEventListener('click', () => beginPlan());
     $('#plan-product-picker-button').addEventListener('click', () => {
         $('#plan-product-search').value = '';
@@ -399,7 +479,7 @@
     });
     $('#new-report').addEventListener('click', () => beginReport());
     $$('[data-cancel]').forEach(button => button.addEventListener('click', () => { $(`#${button.dataset.cancel}-form`).hidden = true; }));
-    $('#plan-form').addEventListener('submit', event => {
+    $('#plan-form').addEventListener('submit', async event => {
         event.preventDefault(); const form = event.currentTarget;
         if (!form.elements.product.value) {
             $('#plan-product-picker-button').setAttribute('aria-invalid', 'true');
@@ -411,12 +491,15 @@
             return notice(t('error.plan_date_order'), 'danger');
         }
         const values = { name: editing.plan || id(), line: form.elements.line.value, product: form.elements.product.value, line_start_date: form.elements.line_start_date.value, shipment_date: form.elements.shipment_date.value, planned_quantity: Number(form.elements.planned_quantity.value) };
-        queue('save_plan', values); form.hidden = true;
+        if (allPlans().some(plan => plan.name !== values.name && plan.line === values.line && !plan.is_deleted && !plan.closed_production_date)) {
+            return notice(t('error.open_plan'), 'danger');
+        }
+        await saveWithConfirmation('save_plan', values, form);
     });
     $('#report-form').elements.line.addEventListener('change', loadAvailablePlans);
     $('#report-form').elements.production_date.addEventListener('change', loadAvailablePlans);
     $('#slot-rows').addEventListener('input', updateFinishedTotal);
-    $('#report-form').addEventListener('submit', event => {
+    $('#report-form').addEventListener('submit', async event => {
         event.preventDefault(); const form = event.currentTarget;
         const plan = availablePlans.find(x => x.name === form.elements.production_plan.value);
         if (!plan) return notice(t('ui.no_open_plan'), 'warning');
@@ -427,7 +510,7 @@
         const slots = $$('.productivity-slot-quantity').map(input => ({ time_slot: input.dataset.timeSlot, finished_quantity: Number(input.value) }));
         if (!slots.length) return notice(t('ui.no_time_slots'), 'warning');
         const values = { name: editing.report || id(), line: form.elements.line.value, production_date: form.elements.production_date.value, production_plan: plan.name, product: plan.product, daily_target_quantity: Number(form.elements.daily_target_quantity.value), working_hours: Number(form.elements.working_hours.value), worker_count: Number(form.elements.worker_count.value), ironing_delivery_quantity: Number(form.elements.ironing_delivery_quantity.value), time_slots: slots };
-        queue('save_report', values); form.hidden = true;
+        await saveWithConfirmation('save_report', values, form);
     });
     $('#line-info-form').elements.line.addEventListener('change', loadLineInfo);
     $('#line-info-form').addEventListener('submit', event => {

@@ -305,7 +305,10 @@ def sync_state(device_id=None):
 
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])
-def sync_batch(device_id=None, operations=None):
+def sync_batch(device_id=None, operations=None, lang=None):
+    language = str(lang or "").split("-")[0]
+    if language in catalog():
+        frappe.local.productivity_lang = language
     device = device_for(device_id)
     operations = payload(operations)
     if not isinstance(operations, list) or len(operations) > 100:

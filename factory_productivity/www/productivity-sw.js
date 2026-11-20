@@ -1,4 +1,4 @@
-const CACHE = 'factory-productivity-web-v2';
+const CACHE = 'factory-productivity-web-v3';
 self.addEventListener('install', event => {
     event.waitUntil(caches.open(CACHE).then(() => self.skipWaiting()));
 });

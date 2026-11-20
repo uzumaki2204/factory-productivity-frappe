@@ -14,7 +14,8 @@ def message(key, lang=None, **values):
         try:
             import frappe
             request = getattr(frappe.local, "request", None)
-            lang = request.headers.get("X-Productivity-Lang") if request else None
+            lang = getattr(frappe.local, "productivity_lang", None)
+            lang = lang or (request.headers.get("X-Productivity-Lang") if request else None)
             lang = lang or getattr(frappe.local, "lang", None)
         except (ImportError, AttributeError):
             lang = None
