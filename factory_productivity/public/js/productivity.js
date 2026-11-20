@@ -27,7 +27,14 @@
     const persist = () => localStorage.setItem(storageKey, JSON.stringify(state));
     const id = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const n = Math.random() * 16 | 0; return (c === 'x' ? n : (n & 3 | 8)).toString(16); }));
     const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
-    const allPlans = () => [...state.plans, ...state.operations.filter(o => o.action === 'save_plan').map(o => o.values)];
+    const allPlans = () => {
+        const plans = new Map(state.plans.map(plan => [plan.name, plan]));
+        state.operations.filter(o => o.action === 'save_plan').forEach(operation => {
+            if (operation.failed_message) plans.delete(operation.values.name);
+            else plans.set(operation.values.name, operation.values);
+        });
+        return [...plans.values()];
+    };
     const productCode = name => { const p = (state.bootstrap.products || []).find(x => x.name === name); return p ? (p.product_code || p.name) : (name || ''); };
     const lineName = name => { const l = (state.bootstrap.lines || []).find(x => x.name === name); return l ? `${l.line_code || l.name}${l.line_name ? ` · ${l.line_name}` : ''}` : (name || ''); };
     const slotName = name => { const s = (state.bootstrap.time_slots || []).find(x => x.name === name); return s ? (s.slot_name || s.name) : (name || ''); };
@@ -38,7 +45,7 @@
         const url = new URL(`/api/method/factory_productivity.api.${method}`, location.origin);
         if (!post) for (const [key, value] of Object.entries(args)) if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, value);
         let response;
-        try { response = await fetch(url, { method: post ? 'POST' : 'GET', credentials: 'omit', cache: 'no-store', headers: post ? { 'Content-Type': 'application/json' } : {}, body: post ? JSON.stringify(args) : undefined }); }
+        try { response = await fetch(url, { method: post ? 'POST' : 'GET', credentials: 'omit', cache: 'no-store', headers: { ...(post ? { 'Content-Type': 'application/json' } : {}), 'X-Productivity-Lang': root.dataset.lang || 'vi' }, body: post ? JSON.stringify(args) : undefined }); }
         catch (_) { throw new Error(t('ui.offline')); }
         let payload;
         try { payload = await response.json(); } catch (_) { throw new Error(t('ui.operation_failed')); }
@@ -54,7 +61,10 @@
         const online = navigator.onLine;
         $('#connection-status').textContent = t(online ? 'ui.online' : 'ui.offline');
         $('#connection-status').className = `indicator-pill ${online ? 'green' : 'orange'}`;
-        $('#pending-count').textContent = state.operations.length ? `(${state.operations.length} ${t('ui.pending_label')})` : '';
+        const pending = state.operations.filter(operation => !operation.failed_message).length;
+        const failed = state.operations.length - pending;
+        const counts = [pending && `${pending} ${t('ui.pending_label')}`, failed && `${failed} ${t('ui.failed_label')}`].filter(Boolean);
+        $('#pending-count').textContent = counts.length ? `(${counts.join(', ')})` : '';
     }
 
     function setView(view) {
@@ -120,11 +130,15 @@
             try {
                 const result = await call(kind === 'plans' ? 'list_plans' : 'list_reports', { device_id: state.device_id, page: pages[kind].page, page_size: 10, ...filterValues(kind) });
                 if (sequence !== refreshSequence[kind]) return;
-                rows[kind] = result.items || [];
-                pages[kind].total = result.total || 0;
+                const remote = result.items || [];
+                const pending = !Object.values(filterValues(kind)).some(Boolean) && pages[kind].page === 1
+                    ? [...new Map(state.operations.filter(o => o.action === (kind === 'plans' ? 'save_plan' : 'save_report'))
+                        .map(o => [o.values.name, o.values])).values()]
+                    : [];
+                rows[kind] = [...pending, ...remote.filter(row => !pending.some(item => item.name === row.name))].slice(0, 10);
+                pages[kind].total = (result.total || 0) + pending.filter(item => !remote.some(row => row.name === item.name)).length;
                 if (!Object.values(filterValues(kind)).some(Boolean) && pages[kind].page === 1) {
-                    const pending = state.operations.filter(o => o.action === (kind === 'plans' ? 'save_plan' : 'save_report')).map(o => o.values);
-                    state[kind] = [...pending, ...rows[kind].filter(row => !pending.some(item => item.name === row.name))];
+                    state[kind] = [...pending, ...remote.filter(row => !pending.some(item => item.name === row.name))];
                     persist();
                 }
             } catch (error) {
@@ -150,17 +164,19 @@
         if (!collection.length) list.innerHTML = `<div class="productivity-card productivity-empty">${esc(t('ui.no_records'))}</div>`;
         else list.innerHTML = collection.map(row => {
             const plan = kind === 'plans';
+            const pending = [...state.operations].reverse().find(o => o.action === (plan ? 'save_plan' : 'save_report') && o.values.name === row.name);
+            const status = pending ? `<span class="indicator-pill ${pending.failed_message ? 'red' : 'orange'}">${esc(pending.failed_message ? t('ui.sync_rejected', { reason: pending.failed_message }) : t('ui.awaiting_sync'))}</span>` : '';
             const total = (row.time_slots || []).reduce((n, x) => n + Number(x.finished_quantity || 0), 0);
             const closed = !!row.closed_production_date;
             const meta = plan ? `${t('ui.line_start_date')}: ${row.line_start_date || ''} · ${t('ui.shipment_date')}: ${row.shipment_date || ''}` : `${t('ui.production_date')}: ${row.production_date || ''} · ${t('ui.finished_total')}: ${total}`;
             const details = plan ? field('ui.planned_quantity', row.planned_quantity) + field('ui.line_start_date', row.line_start_date) + field('ui.shipment_date', row.shipment_date) + field('ui.closed_date', row.closed_production_date || '') : field('ui.daily_target', row.daily_target_quantity) + field('ui.hours', row.working_hours) + field('ui.worker_count', row.worker_count) + field('ui.ironing_delivery', row.ironing_delivery_quantity);
-            const buttons = plan
+            const buttons = pending ? actionButton(plan ? 'edit-plan' : 'edit-report', row, 'ui.edit', 'btn-primary') : plan
                 ? actionButton('edit-plan', row, 'ui.edit', 'btn-primary', 'productivity-plan-action')
                     + actionButton(closed ? 'reopen-plan' : 'finish-plan', row, closed ? 'ui.reopen' : 'ui.finish', closed ? 'btn-success' : 'btn-warning', 'productivity-plan-action')
                     + (closed ? actionButton('change-date-plan', row, 'ui.change_closed_date') : '')
                     + actionButton('delete-plan', row, 'ui.delete', 'btn-danger', 'productivity-plan-action')
                 : actionButton('detail-report', row, 'ui.detail') + actionButton('edit-report', row, 'ui.edit') + actionButton('delete-report', row, 'ui.delete');
-            return `<details class="productivity-record"><summary><div class="productivity-record-top"><span class="productivity-record-title">${esc(productCode(row.product))}</span>${plan ? `<span class="indicator-pill ${closed ? 'gray' : 'green'}">${esc(t(closed ? 'ui.closed' : 'ui.open'))}</span>` : `<strong>${esc(total)}</strong>`}</div><div class="productivity-record-meta"><span>${esc(lineName(row.line))}</span><span>${esc(meta)}</span></div></summary><div class="productivity-record-body"><dl>${details}</dl><div class="productivity-card-actions">${buttons}</div></div></details>`;
+            return `<details class="productivity-record"><summary><div class="productivity-record-top"><span class="productivity-record-title">${esc(productCode(row.product))}</span>${status || (plan ? `<span class="indicator-pill ${closed ? 'gray' : 'green'}">${esc(t(closed ? 'ui.closed' : 'ui.open'))}</span>` : `<strong>${esc(total)}</strong>`)}</div><div class="productivity-record-meta"><span>${esc(lineName(row.line))}</span><span>${esc(meta)}</span></div></summary><div class="productivity-record-body"><dl>${details}</dl><div class="productivity-card-actions">${buttons}</div></div></details>`;
         }).join('');
         const pg = pages[kind];
         const count = Math.max(1, Math.ceil(pg.total / 10));
@@ -181,30 +197,35 @@
         await Promise.all([loadList('plans'), loadList('reports')]);
     }
 
-    async function sync() {
-        if (syncing || !state.operations.length || !state.device_id || !navigator.onLine) return;
+    async function sync(retryFailed = false) {
+        const pending = state.operations.filter(operation => retryFailed || !operation.failed_message);
+        if (syncing || !pending.length || !state.device_id || !navigator.onLine) return;
         syncing = true;
         try {
-            const pending = [...state.operations];
             const response = await call('sync_batch', { device_id: state.device_id, operations: pending }, true);
             const done = new Set((response.results || []).filter(x => x.success).map(x => x.operation_id));
+            const rejected = new Map((response.results || []).filter(x => !x.success).map(x => [x.operation_id, x.message || t('ui.sync_failed')]));
             state.operations = state.operations.filter(x => !done.has(x.operation_id));
+            state.operations.forEach(operation => { if (rejected.has(operation.operation_id)) operation.failed_message = rejected.get(operation.operation_id); });
             persist(); updateStatus();
             const failed = (response.results || []).find(x => !x.success);
-            if (failed) notice(failed.message || t('ui.sync_failed'), 'danger');
-            else { notice(t('ui.sync_done'), 'success'); await refresh(); }
+            if (failed) notice(t('ui.sync_rejected', { reason: failed.message || t('ui.sync_failed') }), 'danger');
+            else notice(t('ui.sync_done'), 'success');
+            await refresh();
         } catch (error) { notice(errorMessage(error), 'danger'); }
         finally { syncing = false; }
     }
 
     function queue(action, values) {
         values.name = values.name || id();
+        state.operations = state.operations.filter(o => o.action !== action || o.values.name !== values.name);
         state.operations.push({ operation_id: id(), action, values });
         const kind = action === 'save_plan' ? 'plans' : action === 'save_report' ? 'reports' : null;
         if (kind) {
             const index = state[kind].findIndex(x => x.name === values.name);
             if (index < 0) state[kind].unshift(values);
             else state[kind][index] = { ...state[kind][index], ...values };
+            pages[kind].total = Math.max(pages[kind].total, state[kind].length);
             rows[kind] = [...state[kind]].slice(0, 10);
             renderList(kind);
         }
@@ -254,7 +275,7 @@
         const line = form.elements.line.value, day = form.elements.production_date.value;
         const original = activeReportRow?.line === line && activeReportRow?.production_date === day ? activeReportRow : null;
         const preferred = original?.production_plan || form.elements.production_plan.value;
-        const local = allPlans().filter(plan => !plan.is_deleted && !plan.closed_production_date && plan.line === line && plan.line_start_date <= day);
+        const local = allPlans().filter(plan => !plan.is_deleted && !plan.closed_production_date && plan.line === line && plan.line_start_date <= day && plan.shipment_date >= day);
         if (original && !local.some(plan => plan.name === original.production_plan)) {
             local.push(allPlans().find(plan => plan.name === original.production_plan) || {
                 name: original.production_plan, product: original.product, line: original.line,
@@ -353,7 +374,7 @@
             state.device_id = device.id; persist(); $('#device-dialog').close(); await refresh(); await sync();
         } catch (error) { notice(errorMessage(error), 'danger'); }
     });
-    $('#sync-button').addEventListener('click', sync);
+    $('#sync-button').addEventListener('click', () => sync(true));
     $('#new-plan').addEventListener('click', () => beginPlan());
     $('#plan-product-picker-button').addEventListener('click', () => {
         $('#plan-product-search').value = '';
@@ -385,6 +406,10 @@
             $('#plan-product-picker-button').focus();
             return notice(t('ui.choose_product'), 'warning');
         }
+        if (form.elements.shipment_date.value < form.elements.line_start_date.value) {
+            form.elements.shipment_date.focus();
+            return notice(t('error.plan_date_order'), 'danger');
+        }
         const values = { name: editing.plan || id(), line: form.elements.line.value, product: form.elements.product.value, line_start_date: form.elements.line_start_date.value, shipment_date: form.elements.shipment_date.value, planned_quantity: Number(form.elements.planned_quantity.value) };
         queue('save_plan', values); form.hidden = true;
     });
@@ -395,6 +420,10 @@
         event.preventDefault(); const form = event.currentTarget;
         const plan = availablePlans.find(x => x.name === form.elements.production_plan.value);
         if (!plan) return notice(t('ui.no_open_plan'), 'warning');
+        if (form.elements.production_date.value < plan.line_start_date || form.elements.production_date.value > (plan.closed_production_date || plan.shipment_date)) {
+            form.elements.production_date.focus();
+            return notice(t('error.report_date'), 'danger');
+        }
         const slots = $$('.productivity-slot-quantity').map(input => ({ time_slot: input.dataset.timeSlot, finished_quantity: Number(input.value) }));
         if (!slots.length) return notice(t('ui.no_time_slots'), 'warning');
         const values = { name: editing.report || id(), line: form.elements.line.value, production_date: form.elements.production_date.value, production_plan: plan.name, product: plan.product, daily_target_quantity: Number(form.elements.daily_target_quantity.value), working_hours: Number(form.elements.working_hours.value), worker_count: Number(form.elements.worker_count.value), ironing_delivery_quantity: Number(form.elements.ironing_delivery_quantity.value), time_slots: slots };

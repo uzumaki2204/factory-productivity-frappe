@@ -5,4 +5,5 @@ factory_productivity.patches.ensure_time_slot
 factory_productivity.patches.ensure_permissions
 factory_productivity.patches.seed_default_time_slots
 factory_productivity.patches.refresh_report_validation
+factory_productivity.patches.refresh_plan_date_validation
 

@@ -1,8 +1,8 @@
 {
   "app": "factory_productivity",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "branch": "version-16",
   "frappe": ">=16.53.0,<17.0.0",
   "factory_management": ">=0.1.87,<0.2.0",
-  "migration": "migrate provisions Time Slot, refreshes permissions and report validation metadata; no historical data rewrite"
+  "migration": "migrate provisions Time Slot, refreshes permissions and plan/report validation metadata; no historical data rewrite"
 }

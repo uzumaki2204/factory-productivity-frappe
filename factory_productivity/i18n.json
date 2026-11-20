@@ -20,6 +20,9 @@
     "error.no_slots": "Vui lòng nhập ít nhất một khung giờ có sản lượng hợp lệ.",
     "error.quantity": "Số lượng phải lớn hơn hoặc bằng 0.",
     "error.date": "Ngày không hợp lệ.",
+    "error.line_start_date_required": "Vui lòng chọn ngày lên chuyền.",
+    "error.shipment_date_required": "Vui lòng chọn ngày xuất hàng.",
+    "error.plan_date_order": "Ngày xuất hàng phải lớn hơn hoặc bằng ngày lên chuyền.",
     "error.permission": "Bạn không có quyền thực hiện thao tác này.",
     "ok.saved": "Đã lưu dữ liệu.",
     "ok.deleted": "Đã chuyển bản ghi vào thùng rác.",
@@ -83,6 +86,8 @@
     "ui.loading": "Đang tải dữ liệu...",
     "ui.saved_offline": "Đã lưu trên thiết bị, sẽ đồng bộ khi có mạng.",
     "ui.sync_failed": "Không thể đồng bộ. Vui lòng thử lại.",
+    "ui.sync_rejected": "Chưa lưu trên máy chủ: {reason}",
+    "ui.awaiting_sync": "Chờ đồng bộ",
     "ui.sync_done": "Đã đồng bộ dữ liệu.",
     "ui.confirm_delete": "Xóa bản ghi này?",
     "ui.confirm_finish": "Hoàn thành kế hoạch này?",
@@ -107,7 +112,8 @@
     "ui.online_required": "Cần kết nối mạng để thực hiện thao tác này.",
     "ui.operation_failed": "Thao tác không thành công.",
     "ui.not_available": "Chưa có dữ liệu để hiển thị.",
-    "ui.pending_label": "chờ"
+    "ui.pending_label": "chờ",
+    "ui.failed_label": "lỗi"
   },
   "en": {
     "error.missing_doctype": "Required DocType is missing: {doctype}.",
@@ -130,6 +136,9 @@
     "error.no_slots": "Enter at least one valid time slot quantity.",
     "error.quantity": "Quantity must be zero or greater.",
     "error.date": "Invalid date.",
+    "error.line_start_date_required": "Please choose a line start date.",
+    "error.shipment_date_required": "Please choose a shipment date.",
+    "error.plan_date_order": "Shipment date must be on or after the line start date.",
     "error.permission": "You cannot perform this action.",
     "ok.saved": "Saved.",
     "ok.deleted": "Record moved to trash.",
@@ -193,6 +202,8 @@
     "ui.loading": "Loading data...",
     "ui.saved_offline": "Saved on this device and will sync when online.",
     "ui.sync_failed": "Could not sync. Please try again.",
+    "ui.sync_rejected": "Not saved on the server: {reason}",
+    "ui.awaiting_sync": "Awaiting sync",
     "ui.sync_done": "Data synchronized.",
     "ui.confirm_delete": "Delete this record?",
     "ui.confirm_finish": "Finish this plan?",
@@ -217,6 +228,7 @@
     "ui.online_required": "This action needs an internet connection.",
     "ui.operation_failed": "Action failed.",
     "ui.not_available": "No data to display.",
-    "ui.pending_label": "pending"
+    "ui.pending_label": "pending",
+    "ui.failed_label": "failed"
   }
 }

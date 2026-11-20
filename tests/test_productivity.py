@@ -27,6 +27,8 @@ master = types.ModuleType('factory_management')
 master.device_registry = Row(ready=lambda d:d.status=='Approved' and d.is_active)
 sys.modules['factory_management'] = master
 from factory_productivity import api
+from factory_productivity.i18n import message
+from factory_productivity.factory_productivity.doctype.productivity_production_plan.productivity_production_plan import ProductivityProductionPlan
 from factory_productivity.factory_productivity.doctype.productivity_report.productivity_report import ProductivityReport
 
 
@@ -51,6 +53,32 @@ class ProductivityTests(unittest.TestCase):
         self.doc.validate()
         self.assertEqual([80,70],[r.finished_quantity for r in self.doc.time_slots])
         self.assertEqual(150,sum(r.finished_quantity for r in self.doc.time_slots))
+
+    def test_plan_rejects_reversed_dates_with_specific_vietnamese_message(self):
+        plan = ProductivityProductionPlan(doctype='Productivity Production Plan', name='P1', company='C', factory='F', line='L', product='P', planned_quantity=1, line_start_date='2026-11-20', shipment_date='2026-11-17', is_deleted=0, closed_production_date=None)
+        plan.meta = Row(has_field=lambda _: False)
+        with self.assertRaisesRegex(ValueError, 'Ngày xuất hàng phải lớn hơn hoặc bằng ngày lên chuyền'):
+            plan.validate()
+        plan.shipment_date = '2026-11-20'
+        plan.validate()
+
+    def test_plan_required_and_malformed_dates_have_localized_messages(self):
+        plan = ProductivityProductionPlan(doctype='Productivity Production Plan', name='P1', company='C', factory='F', line='L', product='P', planned_quantity=1, line_start_date=None, shipment_date='2026-11-21', is_deleted=0, closed_production_date=None)
+        plan.meta = Row(has_field=lambda _: False)
+        for start, shipment, expected in [(None, '2026-11-21', 'Vui lòng chọn ngày lên chuyền'), ('2026-11-20', None, 'Vui lòng chọn ngày xuất hàng'), ('2026-99-99', '2026-11-21', 'Ngày không hợp lệ')]:
+            with self.subTest(start=start, shipment=shipment):
+                plan.line_start_date, plan.shipment_date = start, shipment
+                with self.assertRaisesRegex(ValueError, expected):
+                    plan.validate()
+
+    def test_requested_language_overrides_frappe_default(self):
+        frappe.local.lang = 'en'
+        frappe.local.request = Row(headers={'X-Productivity-Lang': 'vi'})
+        try:
+            self.assertEqual('Ngày xuất hàng phải lớn hơn hoặc bằng ngày lên chuyền.', message('error.plan_date_order'))
+        finally:
+            frappe.local.lang = 'vi'
+            frappe.local.pop('request', None)
 
     def test_report_requires_at_least_one_time_slot_like_dotnet(self):
         self.doc.time_slots=[]

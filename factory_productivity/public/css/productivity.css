@@ -34,6 +34,7 @@ body { background: var(--bg-color, #f8f9fa); }
 .productivity-record summary::-webkit-details-marker { display: none; }
 .productivity-record-top, .productivity-record-meta, .productivity-card-actions { display: flex; justify-content: space-between; gap: .6rem; flex-wrap: wrap; }
 .productivity-record-title { font-weight: 650; }
+.productivity-record-top .indicator-pill { max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
 .productivity-record-meta { color: var(--text-muted, #6c757d); margin-top: .4rem; }
 .productivity-record-body { border-top: 1px solid var(--border-color, #ddd); margin-top: .8rem; padding-top: .8rem; }
 .productivity-record-body dl { display: grid; grid-template-columns: 1fr 1fr; gap: .3rem .7rem; }
