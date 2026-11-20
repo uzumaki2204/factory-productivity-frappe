@@ -88,6 +88,20 @@
         $('#pending-count').textContent = state.operations.length ? `(${state.operations.length} ${t('ui.pending_label')})` : '';
         $('#failed-button').hidden = !state.failed.length;
         $('#failed-button').textContent = t('ui.failed_drafts', { count: state.failed.length });
+        renderDeviceIdentity();
+    }
+
+    function renderDeviceIdentity() {
+        const active = !!state.device_id;
+        const name = state.bootstrap.device?.name || '';
+        $('#device-name').hidden = !active || !name;
+        $('#device-name').textContent = name;
+        $('#device-active-info').hidden = !active;
+        $('#device-help').hidden = active;
+        $('#device-form').hidden = active;
+        $('#device-name-value').textContent = name || t('ui.device_name_unknown');
+        $('#device-id-value').textContent = state.device_id;
+        $('#device-id').value = active ? state.device_id : '';
     }
 
     function renderFailedDrafts() {
@@ -222,9 +236,9 @@
             return;
         }
         if (navigator.onLine) {
-            try { state.bootstrap = await call('bootstrap', { device_id: state.device_id }); persist(); fillMasters(); }
+            try { state.bootstrap = await call('bootstrap', { device_id: state.device_id }); persist(); fillMasters(); updateStatus(); }
             catch (error) { notice(errorMessage(error), 'danger'); }
-        } else fillMasters();
+        } else { fillMasters(); updateStatus(); }
         await Promise.all([loadList('plans'), loadList('reports')]);
     }
 
@@ -443,14 +457,30 @@
     }
 
     $$('.productivity-nav-button').forEach(button => button.addEventListener('click', () => setView(button.dataset.view)));
-    $('#device-button').addEventListener('click', () => { $('#device-id').value = state.device_id; $('#device-dialog').showModal(); });
+    $('#device-button').addEventListener('click', () => { renderDeviceIdentity(); $('#device-dialog').showModal(); });
     $$('[data-close-dialog]').forEach(button => button.addEventListener('click', () => button.closest('dialog').close()));
     $('#device-form').addEventListener('submit', async event => {
         event.preventDefault(); const newId = $('#device-id').value.trim();
         try {
             const device = await call('check_device', { device_id: newId }, true);
-            state.device_id = device.id; persist(); $('#device-dialog').close(); await refresh(); await sync();
+            state.device_id = device.id;
+            state.bootstrap = { ...state.bootstrap, device };
+            persist(); updateStatus(); $('#device-dialog').close(); await refresh(); await sync();
         } catch (error) { notice(errorMessage(error), 'danger'); }
+    });
+    $('#clear-device-cache').addEventListener('click', async () => {
+        const unsaved = state.operations.length + state.failed.length;
+        if (unsaved && !window.confirm(t('ui.confirm_clear_device_cache', { count: unsaved }))) return;
+        localStorage.removeItem(storageKey);
+        state = { ...blank, operations: [], failed: [], plans: [], reports: [], bootstrap: {} };
+        for (const kind of ['plans', 'reports']) {
+            pages[kind].page = 1;
+            pages[kind].total = 0;
+            rows[kind] = [];
+        }
+        $('#device-dialog').close();
+        notice(t('ui.device_cache_cleared'), 'success');
+        await refresh();
     });
     $('#sync-button').addEventListener('click', sync);
     $('#failed-button').addEventListener('click', () => { renderFailedDrafts(); $('#failed-dialog').showModal(); });

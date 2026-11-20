@@ -8,6 +8,7 @@
     <div class="productivity-brand"><img src="/assets/factory_productivity/images/productivity.svg" alt="" width="36" height="36"><strong>{{ texts['ui.title'] }}</strong></div>
     <div class="productivity-header-actions">
       <span id="connection-status" class="indicator-pill" role="status" aria-live="polite"></span>
+      <span id="device-name" class="indicator-pill gray productivity-device-name" hidden></span>
       <button id="sync-button" class="btn btn-default btn-sm" type="button">{{ texts['ui.sync'] }} <span id="pending-count"></span></button>
       <button id="failed-button" class="btn btn-default btn-sm" type="button" hidden></button>
       <button id="device-button" class="btn btn-default btn-sm" type="button">{{ texts['ui.device'] }}</button>
@@ -94,7 +95,11 @@
 </dialog>
 <dialog id="device-dialog" class="productivity-dialog" aria-labelledby="device-title">
   <div class="productivity-dialog-heading"><h2 id="device-title">{{ texts['ui.device'] }}</h2><button class="btn btn-default" data-close-dialog type="button">{{ texts['ui.close'] }}</button></div>
-  <p>{{ texts['ui.device_help'] }}</p>
+  <p id="device-help">{{ texts['ui.device_help'] }}</p>
+  <div id="device-active-info" class="productivity-device-info" hidden>
+    <dl><dt>{{ texts['ui.device_name'] }}</dt><dd id="device-name-value"></dd><dt>{{ texts['ui.device'] }}</dt><dd id="device-id-value"></dd></dl>
+    <button id="clear-device-cache" class="btn btn-danger" type="button">{{ texts['ui.clear_device_cache'] }}</button>
+  </div>
   <form id="device-form"><label>{{ texts['ui.device'] }}<input id="device-id" class="form-control" name="device_id" autocomplete="off" required></label><button class="btn btn-primary mt-3" type="submit">{{ texts['ui.activate'] }}</button></form>
 </dialog>
 <dialog id="detail-dialog" class="productivity-dialog" aria-labelledby="detail-title"><div class="productivity-dialog-heading"><h2 id="detail-title">{{ texts['ui.report_detail'] }}</h2><button class="btn btn-default" data-close-dialog type="button">{{ texts['ui.close'] }}</button></div><div id="detail-content"></div></dialog>

@@ -5,6 +5,7 @@ body { background: var(--bg-color, #f8f9fa); }
 .productivity-brand { font-size: 1.2rem; }
 .productivity-header-actions { flex-wrap: wrap; justify-content: flex-end; }
 .productivity-header-actions [hidden] { display: none; }
+.productivity-device-name { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .productivity-nav { display: flex; gap: .4rem; margin: 1rem 0; border-bottom: 1px solid var(--border-color, #ddd); }
 .productivity-nav-button { min-height: 44px; padding: .65rem 1rem; background: transparent; border: 0; color: var(--text-muted, #6c757d); font-weight: 600; }
 .productivity-nav-button.active { color: var(--primary, #2490ef); border-bottom: 2px solid currentColor; }
@@ -58,6 +59,9 @@ body { background: var(--bg-color, #f8f9fa); }
 .productivity-failed-draft { border: 1px solid var(--border-color, #ddd); border-radius: 8px; padding: .8rem; overflow-wrap: anywhere; }
 .productivity-failed-draft p { margin: .35rem 0 .7rem; color: var(--red-600, #b42318); }
 .productivity-dialog label { display: block; }
+.productivity-device-info dl { display: grid; grid-template-columns: 1fr; gap: .25rem; margin: 0 0 1rem; }
+.productivity-device-info dt { color: var(--text-muted, #6c757d); }
+.productivity-device-info dd { margin: 0 0 .65rem; font-weight: 600; overflow-wrap: anywhere; }
 .productivity-product-dialog { width: min(94vw, 720px); }
 .productivity-product-dialog .form-control { margin: .35rem 0 1rem; }
 .productivity-product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: .6rem; max-height: 58vh; overflow: auto; }
