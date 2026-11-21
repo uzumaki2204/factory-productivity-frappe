@@ -17,7 +17,7 @@ function start(initial, reply) {
         if (!elements.has(selector)) {
             const fields = new Map();
             elements.set(selector, {
-                textContent: '', innerHTML: '', hidden: selector === '#reports-view' || selector === '#line-info-view', open: false, dataset: {},
+                textContent: '', innerHTML: '', hidden: selector === '#reports-view' || selector === '#line-info-view' || selector === '#line-info-form', open: false, dataset: {},
                 classList: { add() {}, remove() {}, toggle() {} },
                 elements: new Proxy({}, { get(_, name) { if (!fields.has(name)) fields.set(name, field()); return fields.get(name); } }),
                 handlers: {},
@@ -48,7 +48,7 @@ function start(initial, reply) {
         fetch: async (url, options) => {
             const result = reply(url.pathname.split('.').pop(), options);
             return result?.__error
-                ? { ok: false, json: async () => ({ exc: result.exc, exc_type: result.exc_type,
+                ? { ok: false, json: async () => result.payload || ({ exc: result.exc, exc_type: result.exc_type,
                     productivity_error_code: result.code, message: result.message }) }
                 : { ok: true, json: async () => ({ message: result }) };
         },
@@ -162,15 +162,37 @@ test('scope conflict blocks stale rows and recovers to the merged line display',
     assert.match(element('#scope-error').textContent, /G1, G2/);
     assert.equal(element('#plans-list').innerHTML, '');
     assert.equal(element('#new-plan').disabled, true);
+    assert.equal(element('#line-info-form').hidden, true);
     assert.equal(app.state.plans[0].name, 'OLD');
 
     conflict = false;
     await app.refresh();
     assert.equal(element('#scope-error').hidden, true);
     assert.equal(element('#new-plan').disabled, false);
+    assert.equal(element('#line-info-form').hidden, false);
     assert.match(element('#plan-scope-label').textContent, /C2X3 \+ C1X3/);
     assert.equal(element('#plan-line-field').hidden, true);
 });
+
+for (const [responseName, payload] of [
+    ['Frappe v1', { exc_type: 'MultipleLineGroupsError',
+        _server_messages: JSON.stringify([JSON.stringify({ message: 'Chuyền C2X1 thuộc G1, G2.' })]) }],
+    ['Frappe v2', { errors: [{ type: 'MultipleLineGroupsError', message: 'Chuyền C2X1 thuộc G1, G2.' }] }],
+    ['server error without a code', { message: 'Không tải được phạm vi chuyền.' }],
+]) {
+    test(`${responseName} blocks forms and pending writes when bootstrap fails`, async () => {
+        const { app, element } = start({ device_id: 'DEV', operations: [], plans: [], reports: [], bootstrap: {} }, method => {
+            assert.equal(method, 'bootstrap');
+            return { __error: true, payload };
+        });
+        await app.refresh();
+        assert.equal(element('#scope-error').hidden, false);
+        assert.equal(element('#line-info-form').hidden, true);
+        assert.equal(element('#new-plan').disabled, true);
+        element('#line-info-form').handlers.submit({ preventDefault() {}, currentTarget: element('#line-info-form') });
+        assert.equal(app.state.operations.length, 0);
+    });
+}
 
 test('saving a report online keeps it open for updates to the same record', async () => {
     const sentNames = [];

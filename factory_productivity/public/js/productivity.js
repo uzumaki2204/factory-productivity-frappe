@@ -49,7 +49,11 @@
     };
     const productCode = name => { const p = (state.bootstrap.products || []).find(x => x.name === name); return p ? (p.product_code || p.name) : (name || ''); };
     const lineName = name => { const l = (state.bootstrap.lines || []).find(x => x.name === name); return l ? `${l.line_code || l.name}${l.line_name ? ` · ${l.line_name}` : ''}` : (name || ''); };
-    const mergedScope = () => !!state.bootstrap.device?.is_merged_scope;
+    const mergedScope = () => state.bootstrap.device?.is_merged_scope === true
+        && Array.isArray(state.bootstrap.device.scope_lines)
+        && state.bootstrap.device.scope_lines.length === 2
+        && new Set(state.bootstrap.device.scope_lines).size === 2
+        && state.bootstrap.device.scope_lines.includes(canonicalLine());
     const canonicalLine = () => state.bootstrap.device?.canonical_line || state.bootstrap.device?.line || '';
     const selectedLine = line => mergedScope() ? canonicalLine() : (line || state.bootstrap.device?.line || '');
     const sameScopeLine = (left, right) => left === right || (mergedScope() && (state.bootstrap.device?.scope_lines || []).includes(left) && (state.bootstrap.device?.scope_lines || []).includes(right));
@@ -84,6 +88,8 @@
         if ($('#detail-dialog').open) $('#detail-dialog').close();
         for (const kind of ['plans', 'reports']) {
             refreshSequence[kind]++;
+            rows[kind] = [];
+            pages[kind].total = 0;
             $(`#${kind}-list`).innerHTML = '';
             $(`#${kind}-pagination`).innerHTML = '';
         }
@@ -95,8 +101,21 @@
         scopeConflict = null;
         $('#scope-error').hidden = true;
         for (const selector of ['#new-plan', '#new-report', '#sync-button']) $(selector).disabled = false;
-        $('#line-info-form').hidden = false;
         renderDeviceIdentity();
+    }
+
+    function responseErrorCode(payload) {
+        const types = [payload.exc_type, ...(Array.isArray(payload.errors) ? payload.errors.map(error => error?.type) : [])];
+        return payload.productivity_error_code
+            || (types.some(type => String(type || '').endsWith('MultipleLineGroupsError')) ? 'multiple_line_groups' : '');
+    }
+
+    function responseErrorMessage(payload) {
+        let messages = [];
+        try { messages = JSON.parse(payload._server_messages || '[]').map(item => JSON.parse(item).message).filter(Boolean); }
+        catch (_) { messages = []; }
+        return messages.join(' ') || (Array.isArray(payload.errors) && payload.errors.find(error => error?.message)?.message)
+            || payload._error_message || payload.message || t('ui.operation_failed');
     }
 
     async function call(method, args = {}, post = false) {
@@ -107,12 +126,9 @@
         catch (_) { const error = new Error(t('ui.offline')); error.network = true; throw error; }
         let payload;
         try { payload = await response.json(); } catch (_) { throw new Error(t('ui.operation_failed')); }
-        if (!response.ok || payload.exc) {
-            let msg = payload._server_messages;
-            try { msg = JSON.parse(msg || '[]').map(x => JSON.parse(x).message).filter(Boolean).join(' '); } catch (_) { msg = ''; }
-            const error = new Error(msg || payload.message || t('ui.operation_failed'));
-            error.code = payload.productivity_error_code
-                || (String(payload.exc_type || '').endsWith('MultipleLineGroupsError') ? 'multiple_line_groups' : '');
+        if (!response.ok || payload.exc || payload.errors?.length) {
+            const error = new Error(responseErrorMessage(payload));
+            error.code = responseErrorCode(payload);
             throw error;
         }
         return payload.message;
@@ -288,13 +304,17 @@
                 state.bootstrap = await call('bootstrap', { device_id: state.device_id });
                 clearScopeConflict();
                 persist(); fillMasters(); updateStatus();
+                $('#line-info-form').hidden = false;
                 if (recoveringScope && !$('#line-info-view').hidden) await loadLineInfo();
             }
             catch (error) {
-                if (error.code === 'multiple_line_groups') { setScopeConflict(errorMessage(error)); return; }
+                if (!error.network) { setScopeConflict(errorMessage(error)); return; }
                 notice(errorMessage(error), 'danger');
             }
-        } else { fillMasters(); updateStatus(); }
+        } else {
+            fillMasters(); updateStatus();
+            $('#line-info-form').hidden = !!scopeConflict || !state.bootstrap.device;
+        }
         await Promise.all([loadList('plans'), loadList('reports')]);
     }
 
@@ -324,6 +344,7 @@
     }
 
     function queue(action, values, retry = true) {
+        if (scopeConflict) return;
         values.name = values.name || id();
         state.failed = state.failed.filter(operation => operation.action !== action || operation.values.name !== values.name);
         state.operations = state.operations.filter(o => o.action !== action || o.values.name !== values.name);
@@ -348,6 +369,7 @@
     }
 
     async function saveWithConfirmation(action, values, form) {
+        if (scopeConflict) return;
         const keepReportOpen = action === 'save_report';
         const dependsOnPendingPlan = action === 'save_report' && state.operations.some(operation => operation.action === 'save_plan' && operation.values.name === values.production_plan);
         const replacesPending = state.operations.some(operation => operation.action === action && operation.values.name === values.name);
@@ -382,6 +404,7 @@
     }
 
     function beginPlan(row = null) {
+        if (scopeConflict) return;
         if (!state.device_id) return $('#device-dialog').showModal();
         const form = $('#plan-form'); form.reset(); editing.plan = row?.name || null;
         $('#plan-form-title').textContent = t(row ? 'ui.edit_plan' : 'ui.new_plan');
@@ -453,6 +476,7 @@
     function updateFinishedTotal() { $('#finished-total').textContent = $$('.productivity-slot-quantity').reduce((n, el) => n + Math.max(0, Number(el.value || 0)), 0); }
 
     async function beginReport(row = null) {
+        if (scopeConflict) return;
         if (!state.device_id) return $('#device-dialog').showModal();
         const form = $('#report-form'); form.reset(); editing.report = row?.name || null; activeReportRow = row;
         $('#report-form-title').textContent = t(row ? 'ui.edit_report' : 'ui.new_report');
@@ -482,7 +506,7 @@
             form.elements.line_leader_name.value = row?.line_leader_name || '';
             form.elements.technical_leader_name.value = row?.technical_leader_name || '';
         } catch (error) {
-            if (error.code === 'multiple_line_groups') setScopeConflict(errorMessage(error));
+            if (!error.network) setScopeConflict(errorMessage(error));
             else notice(errorMessage(error), 'danger');
         }
     }
@@ -557,7 +581,7 @@
         const button = event.target.closest('[data-failed-index]');
         if (!button) return;
         const operation = state.failed[Number(button.dataset.failedIndex)];
-        if (!operation) return;
+        if (!operation || scopeConflict) return;
         $('#failed-dialog').close();
         if (operation.action === 'save_plan') { setView('plans'); beginPlan(operation.values); }
         else if (operation.action === 'save_report') { setView('reports'); await beginReport(operation.values); }
@@ -634,6 +658,7 @@
     $('#line-info-form').elements.line.addEventListener('change', loadLineInfo);
     $('#line-info-form').addEventListener('submit', event => {
         event.preventDefault(); const form = event.currentTarget;
+        if (scopeConflict) return;
         const values = { name: editing.line || id(), line: form.elements.line.value, line_leader_name: form.elements.line_leader_name.value.trim(), technical_leader_name: form.elements.technical_leader_name.value.trim() };
         editing.line = values.name;
         queue('save_line_info', values);
@@ -651,7 +676,7 @@
         });
         $(`#${kind}-pagination`).addEventListener('click', event => { const button = event.target.closest('[data-page]'); if (!button) return; pages[kind].page += button.dataset.page === 'next' ? 1 : -1; loadList(kind); });
     }
-    window.addEventListener('online', async () => { updateStatus(); await sync(); await refresh(); });
+    window.addEventListener('online', async () => { updateStatus(); await refresh(); await sync(); });
     window.addEventListener('offline', () => { updateStatus(); loadList('plans'); loadList('reports'); });
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('/productivity-sw.js', { scope: '/productivity' }).catch(() => {});
     updateStatus(); refresh().then(sync);
