@@ -7,11 +7,22 @@
   <header class="productivity-header">
     <div class="productivity-brand"><img src="/assets/factory_productivity/images/productivity.svg" alt="" width="36" height="36"><strong>{{ texts['ui.title'] }}</strong></div>
     <div class="productivity-header-actions">
-      <span id="connection-status" class="indicator-pill" role="status" aria-live="polite"></span>
-      <span id="device-name" class="indicator-pill gray productivity-device-name" hidden></span>
-      <button id="sync-button" class="btn btn-default btn-sm" type="button">{{ texts['ui.sync'] }} <span id="pending-count"></span></button>
-      <button id="failed-button" class="btn btn-default btn-sm" type="button" hidden></button>
-      <button id="device-button" class="btn btn-default btn-sm" type="button">{{ texts['ui.device'] }}</button>
+      <span id="connection-status" class="productivity-connectivity is-online" role="status" aria-live="polite" aria-label="{{ texts['ui.online'] }}" title="{{ texts['ui.online'] }}">
+        <svg id="connection-online-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 8.8a15.5 15.5 0 0 1 20 0M5 12.8a10.5 10.5 0 0 1 14 0M8.5 16.4a5.2 5.2 0 0 1 7 0M12 20h.01" /></svg>
+        <svg id="connection-offline-icon" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M2 8.8a15.5 15.5 0 0 1 20 0M5 12.8a10.5 10.5 0 0 1 14 0M8.5 16.4a5.2 5.2 0 0 1 7 0M12 20h.01M3 3l18 18" /></svg>
+      </span>
+      <span id="device-name" class="productivity-device-name" hidden></span>
+      <button id="sync-button" class="btn btn-default productivity-icon-button" type="button" aria-label="{{ texts['ui.sync'] }}" title="{{ texts['ui.sync'] }}">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9A7 7 0 0 1 18 6l2 2M4 16l2 2a7 7 0 0 0 12.4-3"/></svg>
+        <span id="pending-count" class="productivity-count-badge" hidden></span>
+      </button>
+      <button id="failed-button" class="btn btn-default productivity-icon-button productivity-failed-button" type="button" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.7 20h18.6L12 3Z"/><path d="M12 9v5m0 3h.01"/></svg>
+        <span id="failed-count" class="productivity-count-badge"></span>
+      </button>
+      <button id="device-button" class="btn btn-default productivity-icon-button" type="button" aria-label="{{ texts['ui.device'] }}" title="{{ texts['ui.device'] }}">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="2.5" width="12" height="19" rx="2"/><path d="M10 18.5h4"/></svg>
+      </button>
     </div>
   </header>
   <div id="notice" class="alert" role="status" aria-live="polite" hidden></div>
@@ -98,15 +109,31 @@
 </dialog>
 <dialog id="device-dialog" class="productivity-dialog" aria-labelledby="device-title">
   <div class="productivity-dialog-heading"><h2 id="device-title">{{ texts['ui.device'] }}</h2><button class="btn btn-default" data-close-dialog type="button">{{ texts['ui.close'] }}</button></div>
-  <p id="device-help">{{ texts['ui.device_help'] }}</p>
-  <div id="device-active-info" class="productivity-device-info" hidden>
-    <dl><dt>{{ texts['ui.device_name'] }}</dt><dd id="device-name-value"></dd><dt>{{ texts['ui.device'] }}</dt><dd id="device-id-value"></dd><dt>{{ texts['ui.registered_line'] }}</dt><dd id="device-line-value"></dd><dt>{{ texts['ui.line_scope'] }}</dt><dd id="device-scope-value"></dd></dl>
-    <button id="clear-device-cache" class="btn btn-danger" type="button">{{ texts['ui.clear_device_cache'] }}</button>
+  <div id="device-message" class="productivity-device-message" role="status" aria-live="polite" hidden></div>
+  <div class="productivity-device-card">
+    <label>{{ texts['ui.current_device'] }}<input id="device-id-value" class="form-control" type="text" readonly></label>
+    <label>{{ texts['ui.display_name'] }}<input id="device-name-value" class="form-control" type="text" readonly></label>
   </div>
-  <form id="device-form"><label>{{ texts['ui.device'] }}<input id="device-id" class="form-control" name="device_id" autocomplete="off" required></label><button class="btn btn-primary mt-3" type="submit">{{ texts['ui.activate'] }}</button></form>
+  <form id="device-form" class="productivity-device-scanner">
+    <div class="productivity-camera-column">
+      <video id="qr-scanner-video" class="productivity-qr-video" autoplay playsinline muted></video>
+      <div id="qr-scanner-status" class="productivity-qr-status" role="status" aria-live="polite">{{ texts['ui.camera_not_started'] }}</div>
+    </div>
+    <div class="productivity-device-controls">
+      <label>{{ texts['ui.manual_device_id'] }}<input id="device-id" class="form-control" name="device_id" placeholder="{{ texts['ui.scan_or_enter_device_id'] }}" autocomplete="off" required></label>
+      <input id="upload-qr-image" type="file" accept="image/png,image/jpeg,image/webp,image/bmp" capture="environment" hidden>
+      <div class="productivity-device-actions">
+        <button id="scan-qr-button" class="btn btn-default" type="button">{{ texts['ui.scan_qr'] }}</button>
+        <button id="upload-qr-button" class="btn btn-default" type="button">{{ texts['ui.upload_qr'] }}</button>
+        <button id="activate-device-button" class="btn btn-primary" type="submit">{{ texts['ui.activate_device'] }}</button>
+        <button id="clear-device-cache" class="btn btn-danger" type="button" hidden>{{ texts['ui.clear_device_cache'] }}</button>
+      </div>
+    </div>
+  </form>
 </dialog>
 <dialog id="detail-dialog" class="productivity-dialog" aria-labelledby="detail-title"><div class="productivity-dialog-heading"><h2 id="detail-title">{{ texts['ui.report_detail'] }}</h2><button class="btn btn-default" data-close-dialog type="button">{{ texts['ui.close'] }}</button></div><div id="detail-content"></div></dialog>
 <dialog id="failed-dialog" class="productivity-dialog" aria-labelledby="failed-title"><div class="productivity-dialog-heading"><h2 id="failed-title">{{ texts['ui.failed_drafts_title'] }}</h2><button class="btn btn-default" data-close-dialog type="button">{{ texts['ui.close'] }}</button></div><div id="failed-drafts-list" class="productivity-list"></div></dialog>
 <script id="productivity-texts" type="application/json">{{ texts_json | safe }}</script>
+<script src="/assets/factory_productivity/js/jsQR.min.js?v={{ asset_version }}" defer></script>
 <script src="/assets/factory_productivity/js/productivity.js?v={{ asset_version }}" defer></script>
 {% endblock %}

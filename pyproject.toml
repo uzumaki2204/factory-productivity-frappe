@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "factory_productivity"
-version = "0.1.20"
+version = "0.1.21"
 description = "Productivity for Frappe 16"
 requires-python = ">=3.14"
 
@@ -17,5 +17,5 @@ where = ["."]
 include = ["factory_productivity*"]
 
 [tool.setuptools.package-data]
-factory_productivity = ["*.txt", "*.json", "translations/*.csv", "www/*.js", "www/*.webmanifest", "www/*.html", "www/*.py", "public/js/*.js", "public/css/*.css", "public/images/*.svg", "public/*.json", "public/*.webmanifest", "factory_productivity/doctype/*/*.json", "factory_productivity/page/*/*.json", "factory_productivity/page/*/*.js"]
+factory_productivity = ["*.txt", "*.json", "translations/*.csv", "www/*.js", "www/*.webmanifest", "www/*.html", "www/*.py", "public/js/*.js", "public/js/*.txt", "public/css/*.css", "public/images/*.svg", "public/*.json", "public/*.webmanifest", "factory_productivity/doctype/*/*.json", "factory_productivity/page/*/*.json", "factory_productivity/page/*/*.js"]
 

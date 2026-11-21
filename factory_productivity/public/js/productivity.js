@@ -18,6 +18,11 @@
     let availablePlans = [];
     let activeReportRow = null;
     let scopeConflict = null;
+    let qrScannerStream = null;
+    let qrScanTimer = 0;
+    let qrScanBusy = false;
+    let qrDetector = null;
+    let qrCanvas = null;
     let planRequest = 0;
     let editing = { plan: null, report: null, line: null };
     let syncing = false;
@@ -136,11 +141,18 @@
 
     function updateStatus() {
         const online = navigator.onLine;
-        $('#connection-status').textContent = t(online ? 'ui.online' : 'ui.offline');
-        $('#connection-status').className = `indicator-pill ${online ? 'green' : 'orange'}`;
-        $('#pending-count').textContent = state.operations.length ? `(${state.operations.length} ${t('ui.pending_label')})` : '';
+        const status = $('#connection-status');
+        status.className = `productivity-connectivity ${online ? 'is-online' : 'is-offline'}`;
+        status.setAttribute('aria-label', t(online ? 'ui.online' : 'ui.offline'));
+        status.title = t(online ? 'ui.online' : 'ui.offline');
+        $('#connection-online-icon').hidden = !online;
+        $('#connection-offline-icon').hidden = online;
+        $('#pending-count').textContent = state.operations.length ? String(state.operations.length) : '';
+        $('#pending-count').hidden = !state.operations.length;
         $('#failed-button').hidden = !state.failed.length;
-        $('#failed-button').textContent = t('ui.failed_drafts', { count: state.failed.length });
+        $('#failed-count').textContent = state.failed.length ? String(state.failed.length) : '';
+        $('#failed-button').setAttribute('aria-label', t('ui.failed_drafts', { count: state.failed.length }));
+        $('#failed-button').title = t('ui.failed_drafts', { count: state.failed.length });
         renderDeviceIdentity();
     }
 
@@ -149,14 +161,176 @@
         const name = state.bootstrap.device?.name || '';
         $('#device-name').hidden = !active || !name;
         $('#device-name').textContent = name;
-        $('#device-active-info').hidden = !active;
-        $('#device-help').hidden = active;
-        $('#device-form').hidden = active;
-        $('#device-name-value').textContent = name || t('ui.device_name_unknown');
-        $('#device-id-value').textContent = state.device_id;
-        $('#device-line-value').textContent = lineName(state.bootstrap.device?.line) || t('ui.not_available');
-        $('#device-scope-value').textContent = scopeConflict ? t('ui.not_available') : (scopeLabel() || t('ui.not_available'));
-        $('#device-id').value = active ? state.device_id : '';
+        $('#device-name-value').value = name || (active ? t('ui.device_name_unknown') : t('ui.not_available'));
+        $('#device-id-value').value = state.device_id || t('ui.not_available');
+        $('#clear-device-cache').hidden = !active;
+    }
+
+    function showDeviceMessage(message, isError = false) {
+        const element = $('#device-message');
+        element.textContent = message || '';
+        element.className = `productivity-device-message${isError ? ' is-error' : ''}`;
+        element.setAttribute('role', isError ? 'alert' : 'status');
+        element.hidden = !message;
+    }
+
+    function openDeviceDialog() {
+        stopQrScanner();
+        showDeviceMessage('');
+        $('#device-id').value = '';
+        renderDeviceIdentity();
+        if (!$('#device-dialog').open) $('#device-dialog').showModal();
+    }
+
+    function parseDevicePayload(value) {
+        const raw = String(value || '').trim();
+        if (!raw) return { id: '', name: '' };
+        try {
+            const parsed = JSON.parse(raw);
+            const id = parsed?.id || parsed?.deviceId || parsed?.device_id;
+            if (id) return { id: String(id).trim(), name: String(parsed.deviceName || parsed.name || '').trim() };
+        } catch (_) { /* QR may contain a plain ID or URL. */ }
+        try {
+            const url = new URL(raw);
+            const id = url.searchParams.get('id') || url.searchParams.get('deviceId') || url.searchParams.get('device_id');
+            if (id) return { id: id.trim(), name: (url.searchParams.get('deviceName') || url.searchParams.get('name') || '').trim() };
+        } catch (_) { /* Treat unrecognized values as raw device IDs. */ }
+        return { id: raw, name: '' };
+    }
+
+    function decodeQrImage(image) {
+        const width = Number(image?.naturalWidth || image?.videoWidth || image?.width || 0);
+        const height = Number(image?.naturalHeight || image?.videoHeight || image?.height || 0);
+        if (!width || !height || typeof window.jsQR !== 'function') return '';
+        qrCanvas = qrCanvas || document.createElement('canvas');
+        qrCanvas.width = width;
+        qrCanvas.height = height;
+        const context = qrCanvas.getContext('2d', { willReadFrequently: true });
+        if (!context) return '';
+        context.drawImage(image, 0, 0, width, height);
+        const pixels = context.getImageData(0, 0, width, height);
+        return String(window.jsQR(pixels.data, width, height, { inversionAttempts: 'attemptBoth' })?.data || '').trim();
+    }
+
+    function stopQrScanner(resetStatus = true) {
+        if (qrScanTimer) window.clearInterval(qrScanTimer);
+        qrScanTimer = 0;
+        if (qrScannerStream) qrScannerStream.getTracks().forEach(track => track.stop());
+        qrScannerStream = null;
+        const video = $('#qr-scanner-video');
+        video.pause?.();
+        video.srcObject = null;
+        qrScanBusy = false;
+        $('#scan-qr-button').textContent = t('ui.scan_qr');
+        if (resetStatus) $('#qr-scanner-status').textContent = t('ui.camera_not_started');
+    }
+
+    async function startQrScanner() {
+        if (!window.isSecureContext) {
+            showDeviceMessage(t('ui.camera_secure_context'), true);
+            $('#qr-scanner-status').textContent = t('ui.camera_secure_context');
+            return;
+        }
+        if (!navigator.mediaDevices?.getUserMedia) {
+            showDeviceMessage(t('ui.camera_unsupported'), true);
+            $('#qr-scanner-status').textContent = t('ui.camera_unsupported');
+            return;
+        }
+        if (typeof window.BarcodeDetector === 'function') {
+            try { qrDetector = new window.BarcodeDetector({ formats: ['qr_code'] }); }
+            catch (_) { qrDetector = null; }
+        }
+        if (!qrDetector && typeof window.jsQR !== 'function') {
+            showDeviceMessage(t('ui.qr_scan_unsupported'), true);
+            return;
+        }
+        try {
+            qrScannerStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+            const video = $('#qr-scanner-video');
+            video.srcObject = qrScannerStream;
+            await video.play();
+            showDeviceMessage('');
+            $('#qr-scanner-status').textContent = t('ui.camera_scan_instructions');
+            $('#scan-qr-button').textContent = t('ui.stop_scanning');
+            qrScanTimer = window.setInterval(scanQrFrame, 500);
+        } catch (error) {
+            stopQrScanner();
+            showDeviceMessage(error?.message || t('ui.camera_open_failed'), true);
+            $('#qr-scanner-status').textContent = t('ui.camera_open_failed');
+        }
+    }
+
+    async function scanQrFrame() {
+        const video = $('#qr-scanner-video');
+        if (!qrScannerStream || qrScanBusy || video.readyState < 2) return;
+        qrScanBusy = true;
+        try {
+            let raw = '';
+            if (qrDetector) {
+                try {
+                    const codes = await qrDetector.detect(video);
+                    raw = String(codes?.[0]?.rawValue || '').trim();
+                } catch (_) { qrDetector = null; }
+            }
+            if (!raw) raw = decodeQrImage(video);
+            if (raw) {
+                stopQrScanner(false);
+                useScannedDeviceCode(raw);
+            }
+        } catch (_) {
+            // Keep scanning through transient frame decode failures.
+        } finally {
+            qrScanBusy = false;
+        }
+    }
+
+    function useScannedDeviceCode(raw) {
+        const parsed = parseDevicePayload(raw);
+        if (!parsed.id) {
+            showDeviceMessage(t('ui.qr_not_recognized'), true);
+            return;
+        }
+        $('#device-id').value = parsed.id;
+        showDeviceMessage(t('ui.qr_scanned'), false);
+        $('#qr-scanner-status').textContent = t('ui.qr_scanned');
+    }
+
+    async function readQrImage(file) {
+        if (!file) return;
+        const allowed = ['image/png', 'image/jpeg', 'image/webp', 'image/bmp', 'image/x-ms-bmp'];
+        const extension = /\.(png|jpe?g|webp|bmp)$/i.test(file.name || '');
+        if (!allowed.includes(String(file.type || '').toLowerCase()) && !extension) {
+            showDeviceMessage(t('ui.qr_image_invalid'), true);
+            return;
+        }
+        try {
+            let image;
+            let dispose = () => {};
+            if (typeof createImageBitmap === 'function') {
+                image = await createImageBitmap(file);
+                dispose = () => image.close?.();
+            } else {
+                const url = URL.createObjectURL(file);
+                image = await new Promise((resolve, reject) => {
+                    const element = new Image();
+                    element.onload = () => resolve(element);
+                    element.onerror = () => reject(new Error(t('ui.qr_image_unreadable')));
+                    element.src = url;
+                }).finally(() => URL.revokeObjectURL(url));
+            }
+            let raw = '';
+            if (typeof window.BarcodeDetector === 'function') {
+                try {
+                    const detector = qrDetector || new window.BarcodeDetector({ formats: ['qr_code'] });
+                    raw = String((await detector.detect(image))?.[0]?.rawValue || '').trim();
+                } catch (_) { raw = ''; }
+            }
+            if (!raw) raw = decodeQrImage(image);
+            if (raw) useScannedDeviceCode(raw);
+            else showDeviceMessage(t('ui.qr_not_found'), true);
+        } catch (error) {
+            showDeviceMessage(error?.message || t('ui.qr_image_unreadable'), true);
+        } finally { dispose(); }
     }
 
     function renderFailedDrafts() {
@@ -295,7 +469,7 @@
         updateStatus();
         if (!state.device_id) {
             for (const kind of ['plans', 'reports']) $(`#${kind}-list`).innerHTML = `<div class="productivity-card productivity-empty">${esc(t('ui.device_required'))}</div>`;
-            if (!$('#device-dialog').open) $('#device-dialog').showModal();
+            if (!$('#device-dialog').open) openDeviceDialog();
             return;
         }
         if (navigator.onLine) {
@@ -540,10 +714,18 @@
     }
 
     $$('.productivity-nav-button').forEach(button => button.addEventListener('click', () => setView(button.dataset.view)));
-    $('#device-button').addEventListener('click', () => { renderDeviceIdentity(); $('#device-dialog').showModal(); });
+    $('#device-button').addEventListener('click', openDeviceDialog);
     $$('[data-close-dialog]').forEach(button => button.addEventListener('click', () => button.closest('dialog').close()));
+    $('#device-dialog').addEventListener('close', () => stopQrScanner());
     $('#device-form').addEventListener('submit', async event => {
-        event.preventDefault(); const newId = $('#device-id').value.trim();
+        event.preventDefault();
+        const input = $('#device-id');
+        const newId = parseDevicePayload(input.value).id;
+        if (!newId) return showDeviceMessage(t('ui.device_id_required'), true);
+        input.value = newId;
+        const button = $('#activate-device-button');
+        button.disabled = true;
+        showDeviceMessage('');
         try {
             const device = await call('check_device', { device_id: newId }, true);
             state.device_id = device.id;
@@ -551,9 +733,16 @@
             persist(); updateStatus(); $('#device-dialog').close(); await refresh(); await sync();
         } catch (error) {
             if (error.code === 'multiple_line_groups' && newId === state.device_id) setScopeConflict(errorMessage(error));
-            else notice(errorMessage(error), 'danger');
-        }
+            showDeviceMessage(errorMessage(error), true);
+        } finally { button.disabled = false; }
     });
+    $('#scan-qr-button').addEventListener('click', () => qrScannerStream ? stopQrScanner() : startQrScanner());
+    $('#upload-qr-button').addEventListener('click', () => {
+        stopQrScanner();
+        $('#upload-qr-image').value = '';
+        $('#upload-qr-image').click();
+    });
+    $('#upload-qr-image').addEventListener('change', event => void readQrImage(event.currentTarget.files?.[0]));
     $('#clear-device-cache').addEventListener('click', async () => {
         const unsaved = state.operations.length + state.failed.length;
         if (unsaved && !window.confirm(t('ui.confirm_clear_device_cache', { count: unsaved }))) return;
@@ -564,11 +753,15 @@
             pages[kind].total = 0;
             rows[kind] = [];
         }
+        stopQrScanner();
         $('#device-dialog').close();
         notice(t('ui.device_cache_cleared'), 'success');
         await refresh();
     });
-    $('#sync-button').addEventListener('click', sync);
+    $('#sync-button').addEventListener('click', () => {
+        if (!state.operations.length) return notice(t('ui.no_pending_sync'), 'info');
+        return sync();
+    });
     $('#failed-button').addEventListener('click', () => { renderFailedDrafts(); $('#failed-dialog').showModal(); });
     $('#failed-drafts-list').addEventListener('click', async event => {
         const discard = event.target.closest('[data-discard-index]');
