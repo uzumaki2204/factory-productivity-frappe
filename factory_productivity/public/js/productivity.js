@@ -159,8 +159,6 @@
     function renderDeviceIdentity() {
         const active = !!state.device_id;
         const name = state.bootstrap.device?.name || '';
-        $('#device-name').hidden = !active || !name;
-        $('#device-name').textContent = name;
         $('#device-name-value').value = name || (active ? t('ui.device_name_unknown') : t('ui.not_available'));
         $('#device-id-value').value = state.device_id || t('ui.not_available');
         $('#clear-device-cache').hidden = !active;
