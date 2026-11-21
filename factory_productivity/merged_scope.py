@@ -160,9 +160,11 @@ def repair_scope(scope):
     reports = _records(REPORT, scope, ["production_date", "production_plan", "product", "line_group", "line_snapshot_type"])
     report_groups = {}
     for report in reports:
-        key = (str(report.production_date), remap.get(report.production_plan, report.production_plan))
+        key = ((str(report.production_date), "plan", remap.get(report.production_plan, report.production_plan))
+               if report.production_plan else (str(report.production_date), "product", report.product))
         report_groups.setdefault(key, []).append(report)
-    for (_, plan_name), group in report_groups.items():
+    for (_, kind, value), group in report_groups.items():
+        plan_name = value if kind == "plan" else None
         winner = _preferred(group, canonical)
         for report in group:
             if report.name != winner.name:
@@ -191,7 +193,7 @@ def resolve_merged_alias(doctype, name, scope):
         return None
     fields = ["name", "line", "is_deleted", "modified_by"]
     fields += (["line_start_date", "shipment_date", "closed_production_date"] if doctype == PLAN
-               else ["production_date", "production_plan"] if doctype == REPORT else [])
+               else ["production_date", "production_plan", "product"] if doctype == REPORT else [])
     old = frappe.db.get_value(doctype, name, fields, as_dict=True)
     if not old or not old.is_deleted or old.modified_by != REPAIR_ACTOR or old.line not in scope["line_ids"]:
         return None
@@ -215,10 +217,14 @@ def resolve_merged_alias(doctype, name, scope):
         matches = [row.name for group in groups if any(row.name == name for row in group)
                    for row in group if not row.is_deleted and row.line == scope["canonical_line"]]
     elif doctype == REPORT:
-        plan_name = resolve_merged_alias(PLAN, old.production_plan, scope) or old.production_plan
-        matches = frappe.get_all(REPORT, pluck="name", filters={"company": scope["company"], "factory": scope["factory"],
-            "line": scope["canonical_line"], "production_plan": plan_name,
-            "production_date": old.production_date, "is_deleted": 0}, limit_page_length=2)
+        filters = {"company": scope["company"], "factory": scope["factory"],
+                   "line": scope["canonical_line"], "production_date": old.production_date, "is_deleted": 0}
+        if old.production_plan:
+            filters["production_plan"] = resolve_merged_alias(PLAN, old.production_plan, scope) or old.production_plan
+        else:
+            filters["production_plan"] = ["is", "not set"]
+            filters["product"] = old.product
+        matches = frappe.get_all(REPORT, pluck="name", filters=filters, limit_page_length=2)
     else:
         matches = frappe.get_all(LINE_INFO, pluck="name", filters={"company": scope["company"],
             "factory": scope["factory"], "line": scope["canonical_line"], "is_deleted": 0}, limit_page_length=2)

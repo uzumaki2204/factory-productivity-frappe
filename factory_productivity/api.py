@@ -172,16 +172,8 @@ def _save(doctype, device, data):
         doc.device = device.name
     if doctype == REPORT:
         plan_name = doc.production_plan
-        if frappe.db.exists(PLAN, plan_name) and frappe.db.get_value(PLAN, plan_name, "is_deleted"):
+        if plan_name and frappe.db.exists(PLAN, plan_name) and frappe.db.get_value(PLAN, plan_name, "is_deleted"):
             doc.production_plan = resolve_merged_alias(PLAN, plan_name, scope) or plan_name
-        plan = scoped_record(PLAN, doc.production_plan, device)
-        if plan.is_deleted:
-            fail("error.plan_missing")
-        if scope["is_merged_scope"]:
-            doc.product = plan.product
-        original_plan = None if doc.is_new() else frappe.db.get_value(REPORT, doc.name, "production_plan")
-        if plan.closed_production_date and doc.production_plan != original_plan:
-            fail("error.plan_closed")
     if doctype == LINE_INFO:
         doc.updated_by_device_name = device.device_name
     if not doc.is_new():
@@ -212,10 +204,16 @@ def bootstrap(device_id=None):
     device = device_for(device_id)
     scope = _scope(device, repair=True, commit_get=True)
     lines = scope["line_ids"]
+    products = frappe.get_all("Product", fields=["name", "product_code", "product_name", "customer", "production_season"],
+                              filters={"is_active": 1}, limit_page_length=20000)
+    customer_ids = {row.customer for row in products if row.customer}
+    season_ids = {row.production_season for row in products if row.production_season}
     return {
         "device": check_device(device_id),
         "lines": frappe.get_all("Production Line", fields=["name", "line_code", "line_name"], filters={"name": ["in", lines]}, limit_page_length=200),
-        "products": frappe.get_all("Product", fields=["name", "product_code", "product_name"], filters={"is_active": 1}, limit_page_length=20000),
+        "products": products,
+        "customers": frappe.get_all("Customer", fields=["name", "customer_code", "customer_name"], filters={"name": ["in", list(customer_ids)]}, limit_page_length=20000) if customer_ids else [],
+        "seasons": frappe.get_all("Production Season", fields=["name", "season_code", "season_name"], filters={"name": ["in", list(season_ids)]}, limit_page_length=20000) if season_ids else [],
         "time_slots": frappe.get_all("Time Slot", fields=["name", "slot_name", "start_time", "end_time", "sort_order"], filters={"company": device.company}, order_by="sort_order asc", limit_page_length=200),
     }
 

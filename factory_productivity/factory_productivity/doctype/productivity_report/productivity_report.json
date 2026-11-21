@@ -81,7 +81,7 @@
       "label": "Production Plan",
       "fieldtype": "Link",
       "options": "Productivity Production Plan",
-      "reqd": 1
+      "reqd": 0
     },
     {
       "fieldname": "product",

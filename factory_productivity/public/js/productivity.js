@@ -15,15 +15,15 @@
     if (!state.bootstrap || typeof state.bootstrap !== 'object') state.bootstrap = {};
     const pages = { plans: { page: 1, total: state.plans.length }, reports: { page: 1, total: state.reports.length } };
     const rows = { plans: state.plans, reports: state.reports };
-    let availablePlans = [];
     let activeReportRow = null;
+    let reportCustomerFilter = '';
+    let reportSeasonFilter = '__all__';
     let scopeConflict = null;
     let qrScannerStream = null;
     let qrScanTimer = 0;
     let qrScanBusy = false;
     let qrDetector = null;
     let qrCanvas = null;
-    let planRequest = 0;
     let editing = { plan: null, report: null, line: null };
     let syncing = false;
     const refreshSequence = { plans: 0, reports: 0 };
@@ -367,10 +367,12 @@
         const lineInfoLine = allLines.find(row => row.name === registeredLine) || (registeredLine ? { name: registeredLine } : null);
         options($('#line-info-form').elements.line, lineInfoLine ? [lineInfoLine] : [], x => lineName(x.name), registeredLine);
         updatePlanProductPicker();
+        updateReportProductPicker();
         $('#plan-line-field').hidden = lines.length === 1;
         $('#report-line-field').hidden = lines.length === 1;
         $('#report-scope').dataset.singleLine = String($('#report-line-field').hidden);
         if ($('#plan-product-dialog').open) renderPlanProductPicker();
+        if ($('#report-product-dialog').open) renderReportProductPicker();
     }
 
     function updatePlanProductPicker() {
@@ -601,50 +603,52 @@
         form.hidden = false; form.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
-    function renderPlanSummary() {
-        const selected = availablePlans.find(plan => plan.name === $('#report-form').elements.production_plan.value);
-        const summary = $('#report-plan-summary');
-        if (!selected) {
-            summary.textContent = t('ui.no_open_plan');
-            summary.classList.add('text-muted');
-            return;
-        }
-        summary.classList.remove('text-muted');
-        const status = selected.closed_production_date ? 'ui.closed' : 'ui.open';
-        const period = selected.line_start_date && (selected.closed_production_date || selected.shipment_date)
-            ? `<small>${esc(t('ui.plan_period', { from: selected.line_start_date, to: selected.closed_production_date || selected.shipment_date }))}</small>`
-            : '';
-        summary.innerHTML = `<div class="productivity-plan-summary__top"><strong>${esc(productCode(selected.product))}</strong><span class="indicator-pill ${selected.closed_production_date ? 'gray' : 'green'}">${esc(t(status))}</span></div>${period}`;
+    function updateReportProductPicker() {
+        const productId = $('#report-form').elements.product.value;
+        const product = (state.bootstrap.products || []).find(row => row.name === productId);
+        $('#report-product-picker-value').textContent = product?.product_code || (productId ? productCode(productId) : t('ui.select_product'));
+        if (productId) $('#report-product-picker-button').removeAttribute('aria-invalid');
     }
 
-    function selectAvailablePlan(preferred) {
-        const selected = availablePlans.find(plan => plan.name === preferred) || availablePlans[0];
-        $('#report-form').elements.production_plan.value = selected?.name || '';
-        renderPlanSummary();
+    const recentProductKey = () => `factory_productivity_recent_products_${state.device_id}`;
+    function recentProductIds() {
+        let ids = [];
+        try { ids = JSON.parse(localStorage.getItem(recentProductKey()) || '[]'); } catch (_) { ids = []; }
+        const active = new Set((state.bootstrap.products || []).map(row => row.name));
+        return Array.isArray(ids) ? [...new Set(ids.filter(id => active.has(id)))].slice(0, 12) : [];
     }
 
-    async function loadAvailablePlans() {
-        const request = ++planRequest;
-        const form = $('#report-form');
-        const line = form.elements.line.value, day = form.elements.production_date.value;
-        const original = sameScopeLine(activeReportRow?.line, line) && activeReportRow?.production_date === day ? activeReportRow : null;
-        const preferred = original?.production_plan || form.elements.production_plan.value;
-        const local = allPlans().filter(plan => !plan.is_deleted && !plan.closed_production_date && sameScopeLine(plan.line, line) && plan.line_start_date <= day && plan.shipment_date >= day);
-        if (original && !local.some(plan => plan.name === original.production_plan)) {
-            local.push(allPlans().find(plan => plan.name === original.production_plan) || {
-                name: original.production_plan, product: original.product, line: original.line,
-            });
-        }
-        availablePlans = local;
-        selectAvailablePlan(preferred);
-        if (state.device_id && navigator.onLine && line && day) {
-            try {
-                const remote = await call('open_plans', { device_id: state.device_id, production_date: day, line });
-                if (request !== planRequest) return;
-                availablePlans = [...remote, ...local.filter(plan => !remote.some(item => item.name === plan.name))];
-                selectAvailablePlan(preferred);
-            } catch (error) { if (request === planRequest) notice(errorMessage(error), 'danger'); }
-        }
+    function rememberReportProduct(productId) {
+        try { localStorage.setItem(recentProductKey(), JSON.stringify([productId, ...recentProductIds().filter(id => id !== productId)].slice(0, 12))); }
+        catch (_) { /* Recent selections are optional when storage is unavailable. */ }
+    }
+
+    function renderReportProductPicker() {
+        const products = (state.bootstrap.products || []).filter(row => row.product_code);
+        const customerIds = [...new Set(products.map(row => row.customer).filter(Boolean))];
+        const seasonIds = [...new Set(products.map(row => row.production_season).filter(Boolean))];
+        const customers = new Map((state.bootstrap.customers || []).map(row => [row.name, row]));
+        const seasons = new Map((state.bootstrap.seasons || []).map(row => [row.name, row]));
+        const customerLabel = id => customers.get(id)?.customer_code || customers.get(id)?.customer_name || id;
+        const seasonLabel = id => seasons.get(id)?.season_code || seasons.get(id)?.season_name || id;
+        const chip = (label, value, selected) => `<button class="productivity-product-chip" type="button" data-filter-value="${esc(value)}" aria-pressed="${selected}">${esc(label)}</button>`;
+        $('#report-customer-filters').innerHTML = chip(t('ui.all_customers'), '', !reportCustomerFilter)
+            + customerIds.sort((a, b) => customerLabel(a).localeCompare(customerLabel(b), root.dataset.lang || 'vi'))
+                .map(id => chip(customerLabel(id), id, reportCustomerFilter === id)).join('');
+        $('#report-season-filters').innerHTML = chip(t('ui.recent_products'), '__recent__', reportSeasonFilter === '__recent__')
+            + chip(t('ui.all_seasons'), '__all__', reportSeasonFilter === '__all__')
+            + seasonIds.sort((a, b) => seasonLabel(a).localeCompare(seasonLabel(b), root.dataset.lang || 'vi'))
+                .map(id => chip(seasonLabel(id), id, reportSeasonFilter === id)).join('');
+        const keyword = $('#report-product-search').value.trim().toLocaleLowerCase();
+        const recent = recentProductIds();
+        const matching = products.filter(row => (!reportCustomerFilter || row.customer === reportCustomerFilter)
+            && (reportSeasonFilter === '__all__' || (reportSeasonFilter === '__recent__' ? recent.includes(row.name) : row.production_season === reportSeasonFilter))
+            && (!keyword || `${row.product_code} ${row.product_name || ''}`.toLocaleLowerCase().includes(keyword)));
+        if (reportSeasonFilter === '__recent__') matching.sort((a, b) => recent.indexOf(a.name) - recent.indexOf(b.name));
+        else matching.sort((a, b) => a.product_code.localeCompare(b.product_code, root.dataset.lang || 'vi'));
+        $('#report-product-grid').innerHTML = matching.length
+            ? matching.map(row => `<button class="btn btn-default productivity-product-card" type="button" data-product-id="${esc(row.name)}" aria-pressed="${row.name === $('#report-form').elements.product.value}">${esc(row.product_code)}</button>`).join('')
+            : `<p class="productivity-empty">${esc(t(reportSeasonFilter === '__recent__' ? 'ui.no_recent_products' : (products.length ? 'ui.no_matching_products' : 'ui.no_products')))}</p>`;
     }
 
     function renderTimeSlots(savedSlots = []) {
@@ -662,14 +666,16 @@
         if (scopeConflict) return;
         if (!state.device_id) return $('#device-dialog').showModal();
         const form = $('#report-form'); form.reset(); editing.report = row?.name || null; activeReportRow = row;
+        reportCustomerFilter = ''; reportSeasonFilter = '__all__';
         $('#report-form-title').textContent = t(row ? 'ui.edit_report' : 'ui.new_report');
         form.elements.production_date.value = row?.production_date || today();
         form.elements.line.value = selectedLine(row?.line);
-        await loadAvailablePlans();
+        form.elements.product.value = row?.product || '';
+        form.elements.production_plan.value = row?.production_plan || '';
+        updateReportProductPicker();
         for (const key of ['daily_target_quantity', 'working_hours', 'worker_count', 'ironing_delivery_quantity']) form.elements[key].value = row?.[key] ?? '';
         renderTimeSlots(row?.time_slots || []);
         form.hidden = false; form.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        if (!availablePlans.length) notice(t('ui.no_open_plan'), 'info');
     }
 
     async function loadLineInfo() {
@@ -819,6 +825,42 @@
         $('#plan-product-picker-button').focus();
     });
     $('#new-report').addEventListener('click', () => beginReport());
+    $('#report-product-picker-button').addEventListener('click', () => {
+        $('#report-product-search').value = '';
+        renderReportProductPicker();
+        $('#report-product-picker-button').setAttribute('aria-expanded', 'true');
+        $('#report-product-dialog').showModal();
+        $('#report-product-search').focus();
+    });
+    $('#report-product-search').addEventListener('input', renderReportProductPicker);
+    $('#report-customer-filters').addEventListener('click', event => {
+        const chip = event.target.closest('[data-filter-value]');
+        if (!chip) return;
+        reportCustomerFilter = chip.dataset.filterValue;
+        renderReportProductPicker();
+    });
+    $('#report-season-filters').addEventListener('click', event => {
+        const chip = event.target.closest('[data-filter-value]');
+        if (!chip) return;
+        reportSeasonFilter = chip.dataset.filterValue;
+        renderReportProductPicker();
+    });
+    $('#report-product-grid').addEventListener('click', event => {
+        const button = event.target.closest('[data-product-id]');
+        if (!button) return;
+        const product = (state.bootstrap.products || []).find(row => row.name === button.dataset.productId && row.product_code);
+        if (!product) return;
+        const form = $('#report-form');
+        form.elements.product.value = product.name;
+        form.elements.production_plan.value = product.name === activeReportRow?.product ? (activeReportRow.production_plan || '') : '';
+        rememberReportProduct(product.name);
+        updateReportProductPicker();
+        $('#report-product-dialog').close();
+    });
+    $('#report-product-dialog').addEventListener('close', () => {
+        $('#report-product-picker-button').setAttribute('aria-expanded', 'false');
+        $('#report-product-picker-button').focus();
+    });
     $$('[data-cancel]').forEach(button => button.addEventListener('click', () => { $(`#${button.dataset.cancel}-form`).hidden = true; }));
     $('#plan-form').addEventListener('submit', async event => {
         event.preventDefault(); const form = event.currentTarget;
@@ -841,20 +883,17 @@
         }
         await saveWithConfirmation('save_plan', values, form);
     });
-    $('#report-form').elements.line.addEventListener('change', loadAvailablePlans);
-    $('#report-form').elements.production_date.addEventListener('change', loadAvailablePlans);
     $('#slot-rows').addEventListener('input', updateFinishedTotal);
     $('#report-form').addEventListener('submit', async event => {
         event.preventDefault(); const form = event.currentTarget;
-        const plan = availablePlans.find(x => x.name === form.elements.production_plan.value);
-        if (!plan) return notice(t('ui.no_open_plan'), 'warning');
-        if (form.elements.production_date.value < plan.line_start_date || form.elements.production_date.value > (plan.closed_production_date || plan.shipment_date)) {
-            form.elements.production_date.focus();
-            return notice(t('error.report_date'), 'danger');
+        if (!form.elements.product.value) {
+            $('#report-product-picker-button').setAttribute('aria-invalid', 'true');
+            $('#report-product-picker-button').focus();
+            return notice(t('ui.choose_product'), 'warning');
         }
         const slots = $$('.productivity-slot-quantity').map(input => ({ time_slot: input.dataset.timeSlot, finished_quantity: Number(input.value) }));
         if (!slots.length) return notice(t('ui.no_time_slots'), 'warning');
-        const values = { name: editing.report || id(), line: form.elements.line.value, production_date: form.elements.production_date.value, production_plan: plan.name, product: plan.product, daily_target_quantity: Number(form.elements.daily_target_quantity.value), working_hours: Number(form.elements.working_hours.value), worker_count: Number(form.elements.worker_count.value), ironing_delivery_quantity: Number(form.elements.ironing_delivery_quantity.value), time_slots: slots };
+        const values = { name: editing.report || id(), line: form.elements.line.value, production_date: form.elements.production_date.value, production_plan: form.elements.production_plan.value || null, product: form.elements.product.value, daily_target_quantity: Number(form.elements.daily_target_quantity.value), working_hours: Number(form.elements.working_hours.value), worker_count: Number(form.elements.worker_count.value), ironing_delivery_quantity: Number(form.elements.ironing_delivery_quantity.value), time_slots: slots };
         await saveWithConfirmation('save_report', values, form);
     });
     $('#line-info-form').elements.line.addEventListener('change', loadLineInfo);

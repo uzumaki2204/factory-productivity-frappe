@@ -37,7 +37,10 @@ function start(initial, reply) {
             querySelector: element,
             querySelectorAll: () => [],
         },
-        localStorage: { getItem: () => storage.current, setItem(_, value) { storage.current = value; } },
+        localStorage: {
+            getItem(key) { return key === 'factory_productivity_offline_v1' ? storage.current : storage[key] ?? null; },
+            setItem(key, value) { if (key === 'factory_productivity_offline_v1') storage.current = value; else storage[key] = value; },
+        },
         navigator: { onLine: true },
         location: { origin: 'http://test.local' },
         window: { addEventListener() {} },
@@ -109,7 +112,7 @@ test('rejected offline plan leaves the queue and server list immediately', async
     assert.equal(app.state.plans.length, 1);
     assert.equal(app.state.plans[0].name, 'EXISTING');
     assert.equal(element('#pending-count').textContent, '');
-    assert.equal(element('#failed-button').textContent, '1 cần sửa');
+    assert.equal(element('#failed-button').title, '1 cần sửa');
     assert.match(element('#plans-list').innerHTML, /GOOD/);
     assert.doesNotMatch(element('#plans-list').innerHTML, /BAD/);
     assert.equal(JSON.parse(storage.current).operations.length, 0);
@@ -170,7 +173,7 @@ test('scope conflict blocks stale rows and recovers to the merged line display',
     assert.equal(element('#scope-error').hidden, true);
     assert.equal(element('#new-plan').disabled, false);
     assert.equal(element('#line-info-form').hidden, false);
-    assert.match(element('#plan-scope-label').textContent, /C2X3 \+ C1X3/);
+    assert.match(element('#device-scope-value').value, /C2X3 \+ C1X3/);
     assert.equal(element('#plan-line-field').hidden, true);
 });
 
@@ -231,4 +234,29 @@ test('repeated offline report saves update one pending operation and keep the fo
     assert.equal(app.state.operations.length, 1);
     assert.equal(app.state.operations[0].values.time_slots[1].finished_quantity, 15);
     assert.equal(form.hidden, false);
+});
+
+test('report product picker filters active codes by customer and season without a plan', () => {
+    const products = [
+        { name: 'P1', product_code: '217H001B', customer: 'C1', production_season: 'S1' },
+        { name: 'P2', product_code: '217H002B', customer: 'C1', production_season: 'S2' },
+        { name: 'P3', product_code: '317H001A', customer: 'C2', production_season: 'S1' },
+    ];
+    const { element, storage } = start({ device_id: 'DEV', operations: [], plans: [], reports: [], bootstrap: {
+        products, customers: [{ name: 'C1', customer_code: 'UNIQLO' }, { name: 'C2', customer_code: 'OTHER' }],
+        seasons: [{ name: 'S1', season_code: '2027SS' }, { name: 'S2', season_code: '2027FW' }],
+    } }, () => {});
+    element('#report-product-picker-button').handlers.click();
+    assert.match(element('#report-customer-filters').innerHTML, /UNIQLO/);
+    assert.match(element('#report-season-filters').innerHTML, /2027SS/);
+    const selectFilter = value => ({ target: { closest: () => ({ dataset: { filterValue: value } }) } });
+    element('#report-customer-filters').handlers.click(selectFilter('C1'));
+    element('#report-season-filters').handlers.click(selectFilter('S1'));
+    assert.match(element('#report-product-grid').innerHTML, /217H001B/);
+    assert.doesNotMatch(element('#report-product-grid').innerHTML, /217H002B|317H001A/);
+    element('#report-product-grid').handlers.click({ target: { closest: () => ({ dataset: { productId: 'P1' } }) } });
+    assert.equal(element('#report-form').elements.product.value, 'P1');
+    assert.equal(element('#report-form').elements.production_plan.value, '');
+    assert.equal(element('#report-product-picker-value').textContent, '217H001B');
+    assert.deepEqual(JSON.parse(storage.factory_productivity_recent_products_DEV), ['P1']);
 });

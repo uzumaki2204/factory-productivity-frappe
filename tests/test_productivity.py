@@ -21,6 +21,7 @@ frappe.utils = Row(today=lambda:'2026-11-17',now=lambda:'2026-11-17 09:30:00')
 sys.modules['frappe'] = frappe
 document = types.ModuleType('frappe.model.document')
 document.Document = Row
+document.Document.is_new = lambda self: False
 sys.modules['frappe.model'] = types.ModuleType('frappe.model')
 sys.modules['frappe.model.document'] = document
 master = types.ModuleType('factory_management')
@@ -42,6 +43,7 @@ class ProductivityTests(unittest.TestCase):
         frappe.db = MagicMock()
         frappe.db.exists.side_effect = lambda dt, name: dt in ('Productivity Production Plan','Product')
         frappe.db.get_value.side_effect = self.get_value
+        frappe.db.sql.side_effect = lambda query, *args, **kwargs: [Row(is_active=1)] if 'tabProduct`' in query else []
         self.plan = Row(name='PLAN',company='C',factory='F',line='L',product='P',line_start_date='2026-11-10',shipment_date='2026-11-21',closed_production_date=None,is_deleted=0)
         frappe.get_doc = MagicMock(return_value=self.plan)
         frappe.get_all = MagicMock(return_value=[])
@@ -108,20 +110,37 @@ class ProductivityTests(unittest.TestCase):
         self.doc.update(daily_target_quantity=0,working_hours=0,worker_count=0,ironing_delivery_quantity=0,time_slots=[Row(time_slot='S1',finished_quantity=0)])
         self.doc.validate()
 
-    def test_report_must_be_within_effective_plan_dates_inclusive(self):
-        for day, valid in [('2026-11-09',False),('2026-11-10',True),('2026-11-21',True),('2026-11-22',False)]:
+    def test_report_date_is_independent_of_plan_dates(self):
+        for day in ('2026-11-09','2026-11-10','2026-11-21','2026-11-22'):
             with self.subTest(day=day):
                 self.doc.production_date=day
-                if valid: self.doc.validate()
-                else:
-                    with self.assertRaises(ValueError): self.doc.validate()
+                self.doc.validate()
 
-    def test_closed_date_replaces_shipment_date(self):
+    def test_legacy_report_remains_editable_after_plan_closes(self):
         self.plan.closed_production_date='2026-11-15'
         self.doc.production_date='2026-11-15'
         self.doc.validate()
         self.doc.production_date='2026-11-16'
-        with self.assertRaises(ValueError): self.doc.validate()
+        self.doc.validate()
+
+    def test_report_without_plan_accepts_active_product(self):
+        self.doc.production_plan = None
+        self.doc.validate()
+        self.assertFalse(frappe.get_doc.called)
+
+    def test_inactive_product_rejected_for_new_report(self):
+        self.doc.production_plan = None
+        self.doc.is_new = lambda: True
+        frappe.db.sql.side_effect = lambda query, *args, **kwargs: [Row(is_active=0)] if 'tabProduct`' in query else []
+        with self.assertRaisesRegex(ValueError, 'Mã hàng'):
+            self.doc.validate()
+
+    def test_inactive_product_remains_editable_on_existing_report(self):
+        self.doc.production_plan = None
+        frappe.db.sql.side_effect = lambda query, *args, **kwargs: [Row(is_active=0)] if 'tabProduct`' in query else []
+        original = self.get_value
+        frappe.db.get_value.side_effect = lambda dt,*args,**kwargs: 'P' if dt == 'Productivity Report' and args and args[0] == 'R' else original(dt,*args,**kwargs)
+        self.doc.validate()
 
     def test_duplicate_line_day_plan_report_rejected_but_self_update_allowed(self):
         original=self.get_value
@@ -131,6 +150,8 @@ class ProductivityTests(unittest.TestCase):
                 if valid: self.doc.validate()
                 else:
                     with self.assertRaises(ValueError): self.doc.validate()
+                filters = next(call.args[1] for call in frappe.db.get_value.call_args_list if call.args[0] == 'Productivity Report' and isinstance(call.args[1], dict))
+                self.assertEqual('P', filters['product'])
 
     def test_plan_scope_or_product_mismatch_rejected(self):
         for field in ('company','factory','line','product'):
@@ -189,6 +210,20 @@ class ProductivityTests(unittest.TestCase):
             api._save(api.REPORT,device,values)
         doc.set.assert_any_call('time_slots',[{'time_slot':'S1','finished_quantity':80}])
         self.assertEqual('C',doc.company)
+        doc.insert.assert_called_once_with(ignore_permissions=True)
+
+    def test_save_report_without_plan_keeps_selected_product(self):
+        device = Row(name='DEV', company='C', factory='F', line='L')
+        doc = MagicMock(production_plan=None)
+        doc.is_new.return_value = True
+        doc.set.side_effect = lambda key, value: setattr(doc, key, value)
+        doc.as_dict.return_value = {'name': 'R', 'product': 'P2', 'production_plan': None}
+        scope = {'line_ids': ['L'], 'is_merged_scope': False}
+        with patch.object(api, '_scope', return_value=scope), patch.object(frappe, 'new_doc', return_value=doc, create=True):
+            result = api._save(api.REPORT, device, {'line': 'L', 'product': 'P2', 'production_date': '2026-11-20', 'production_plan': None})
+        self.assertEqual('P2', doc.product)
+        self.assertIsNone(doc.production_plan)
+        self.assertEqual('P2', result['product'])
         doc.insert.assert_called_once_with(ignore_permissions=True)
 
     def test_sync_retry_returns_receipt_without_applying_mutation_again(self):
@@ -305,6 +340,9 @@ class ProductivityTests(unittest.TestCase):
             Row(name='R1', line='A', production_date='2026-11-03', production_plan='P1', product='X', line_group='G', line_snapshot_type='group', modified='2026-11-03'),
             Row(name='R2', line='B', production_date='2026-11-03', production_plan='P2', product='Y', line_group=None, line_snapshot_type='line', modified='2026-11-04'),
             Row(name='R3', line='B', production_date='2026-11-07', production_plan='P3', product='Z', line_group=None, line_snapshot_type='line', modified='2026-11-07'),
+            Row(name='R4', line='A', production_date='2026-11-08', production_plan=None, product='U', line_group='G', line_snapshot_type='group', modified='2026-11-08'),
+            Row(name='R5', line='B', production_date='2026-11-08', production_plan=None, product='U', line_group=None, line_snapshot_type='line', modified='2026-11-09'),
+            Row(name='R6', line='B', production_date='2026-11-08', production_plan=None, product='V', line_group=None, line_snapshot_type='line', modified='2026-11-09'),
         ]
         infos = [Row(name='I1', line='A', modified='2026-11-01'), Row(name='I2', line='B', modified='2026-11-02')]
         sources = {api.PLAN: plans, api.REPORT: reports, api.LINE_INFO: infos}
@@ -319,6 +357,8 @@ class ProductivityTests(unittest.TestCase):
         self.assertEqual('A', plans[2].line)
         self.assertEqual(1, reports[1].is_deleted)
         self.assertEqual(('A', 'P3', 'Z'), (reports[2].line, reports[2].production_plan, reports[2].product))
+        self.assertEqual(1, reports[4].is_deleted)
+        self.assertEqual(('A', 'V', None), (reports[5].line, reports[5].product, reports[5].production_plan))
         self.assertEqual(1, infos[1].is_deleted)
 
     def test_old_queued_plan_id_resolves_through_transitive_overlap(self):

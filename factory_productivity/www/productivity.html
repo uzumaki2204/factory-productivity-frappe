@@ -65,8 +65,12 @@
         <label>{{ texts['ui.production_date'] }}<input class="form-control" type="date" name="production_date" required></label>
         <label id="report-line-field" hidden>{{ texts['ui.line'] }}<select class="form-control" name="line" required></select></label>
       </div>
+      <div class="productivity-product-field">
+        <label id="report-product-label" for="report-product-picker-button">{{ texts['ui.product'] }}</label>
+        <input type="hidden" name="product">
+        <button id="report-product-picker-button" class="btn btn-default productivity-product-trigger" type="button" aria-labelledby="report-product-label report-product-picker-value" aria-haspopup="dialog" aria-controls="report-product-dialog" aria-expanded="false"><span id="report-product-picker-value">{{ texts['ui.select_product'] }}</span><span aria-hidden="true">▾</span></button>
+      </div>
       <input type="hidden" name="production_plan" form="report-form">
-      <div id="report-plan-summary" class="productivity-plan-summary" aria-live="polite"></div>
       <div class="productivity-grid">
         <label>{{ texts['ui.daily_target'] }}<input class="form-control" type="number" min="0" step="1" name="daily_target_quantity" required></label>
         <label>{{ texts['ui.hours'] }}<input class="form-control" type="number" min="0" step="0.01" name="working_hours" required></label>
@@ -103,6 +107,14 @@
   <label for="plan-product-search">{{ texts['ui.search_product'] }}</label>
   <input id="plan-product-search" class="form-control" type="search" placeholder="{{ texts['ui.search_product_placeholder'] }}" autocomplete="off">
   <div id="plan-product-grid" class="productivity-product-grid"></div>
+</dialog>
+<dialog id="report-product-dialog" class="productivity-dialog productivity-product-dialog" aria-labelledby="report-product-title">
+  <div class="productivity-dialog-heading"><h2 id="report-product-title">{{ texts['ui.select_product'] }}</h2><button class="btn btn-default" data-close-dialog type="button">{{ texts['ui.close'] }}</button></div>
+  <label for="report-product-search">{{ texts['ui.search_product'] }}</label>
+  <input id="report-product-search" class="form-control" type="search" placeholder="{{ texts['ui.search_product_placeholder'] }}" autocomplete="off">
+  <div id="report-customer-filters" class="productivity-product-filters" role="group" aria-label="{{ texts['ui.filter_customer'] }}"></div>
+  <div id="report-season-filters" class="productivity-product-filters" role="group" aria-label="{{ texts['ui.filter_season'] }}"></div>
+  <div id="report-product-grid" class="productivity-product-grid" aria-live="polite"></div>
 </dialog>
 <dialog id="device-dialog" class="productivity-dialog" aria-labelledby="device-title">
   <div class="productivity-dialog-heading"><h2 id="device-title">{{ texts['ui.device'] }}</h2><button class="btn btn-default" data-close-dialog type="button">{{ texts['ui.close'] }}</button></div>
