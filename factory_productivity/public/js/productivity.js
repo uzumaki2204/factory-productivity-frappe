@@ -359,11 +359,6 @@
         updatePlanProductPicker();
         $('#plan-line-field').hidden = lines.length === 1;
         $('#report-line-field').hidden = lines.length === 1;
-        for (const name of ['plan', 'report']) {
-            const label = $(`#${name}-scope-label`);
-            label.hidden = !mergedScope();
-            label.textContent = `${t('ui.line_scope')}: ${scopeLabel()}`;
-        }
         $('#report-scope').dataset.singleLine = String($('#report-line-field').hidden);
         if ($('#plan-product-dialog').open) renderPlanProductPicker();
     }

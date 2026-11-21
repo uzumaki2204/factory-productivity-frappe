@@ -37,7 +37,6 @@
       <div class="productivity-form-heading"><h2 id="plan-form-title">{{ texts['ui.new_plan'] }}</h2><button class="btn btn-default" data-cancel="plan" type="button">{{ texts['ui.cancel'] }}</button></div>
       <div id="plan-scope" class="productivity-grid">
         <label id="plan-line-field" hidden>{{ texts['ui.line'] }}<select class="form-control" name="line" required></select></label>
-        <p id="plan-scope-label" class="text-muted" hidden></p>
         <div class="productivity-product-field">
           <label id="plan-product-label" for="plan-product-picker-button">{{ texts['ui.product'] }}</label>
           <input type="hidden" name="product">
@@ -65,7 +64,6 @@
       <div id="report-scope" class="productivity-grid" data-single-line="true">
         <label>{{ texts['ui.production_date'] }}<input class="form-control" type="date" name="production_date" required></label>
         <label id="report-line-field" hidden>{{ texts['ui.line'] }}<select class="form-control" name="line" required></select></label>
-        <p id="report-scope-label" class="text-muted" hidden></p>
       </div>
       <input type="hidden" name="production_plan" form="report-form">
       <div id="report-plan-summary" class="productivity-plan-summary" aria-live="polite"></div>
