@@ -158,9 +158,12 @@
 
     function renderDeviceIdentity() {
         const active = !!state.device_id;
-        const name = state.bootstrap.device?.name || '';
+        const device = state.bootstrap.device || {};
+        const name = device.name || '';
         $('#device-name-value').value = name || (active ? t('ui.device_name_unknown') : t('ui.not_available'));
         $('#device-id-value').value = state.device_id || t('ui.not_available');
+        $('#device-line-value').value = active ? (lineName(device.line) || t('ui.not_available')) : t('ui.not_available');
+        $('#device-scope-value').value = active && !scopeConflict ? (scopeLabel() || t('ui.not_available')) : t('ui.not_available');
         $('#clear-device-cache').hidden = !active;
     }
 
