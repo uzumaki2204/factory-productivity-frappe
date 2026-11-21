@@ -17,6 +17,7 @@
     const rows = { plans: state.plans, reports: state.reports };
     let availablePlans = [];
     let activeReportRow = null;
+    let scopeConflict = null;
     let planRequest = 0;
     let editing = { plan: null, report: null, line: null };
     let syncing = false;
@@ -72,6 +73,31 @@
     };
     const notice = (message, kind = 'info') => { const el = $('#notice'); el.textContent = message; el.className = `alert alert-${kind}`; el.hidden = false; clearTimeout(notice.timer); notice.timer = setTimeout(() => { el.hidden = true; }, 7000); };
     const errorMessage = error => error?.message || t('ui.operation_failed');
+    function setScopeConflict(message) {
+        scopeConflict = message;
+        const alert = $('#scope-error');
+        alert.textContent = message;
+        alert.hidden = false;
+        $('#notice').hidden = true;
+        for (const selector of ['#new-plan', '#new-report', '#sync-button']) $(selector).disabled = true;
+        for (const selector of ['#plan-form', '#report-form', '#line-info-form']) $(selector).hidden = true;
+        if ($('#detail-dialog').open) $('#detail-dialog').close();
+        for (const kind of ['plans', 'reports']) {
+            refreshSequence[kind]++;
+            $(`#${kind}-list`).innerHTML = '';
+            $(`#${kind}-pagination`).innerHTML = '';
+        }
+        renderDeviceIdentity();
+    }
+
+    function clearScopeConflict() {
+        if (!scopeConflict) return;
+        scopeConflict = null;
+        $('#scope-error').hidden = true;
+        for (const selector of ['#new-plan', '#new-report', '#sync-button']) $(selector).disabled = false;
+        $('#line-info-form').hidden = false;
+        renderDeviceIdentity();
+    }
 
     async function call(method, args = {}, post = false) {
         const url = new URL(`/api/method/factory_productivity.api.${method}`, location.origin);
@@ -84,7 +110,10 @@
         if (!response.ok || payload.exc) {
             let msg = payload._server_messages;
             try { msg = JSON.parse(msg || '[]').map(x => JSON.parse(x).message).filter(Boolean).join(' '); } catch (_) { msg = ''; }
-            throw new Error(msg || payload.message || t('ui.operation_failed'));
+            const error = new Error(msg || payload.message || t('ui.operation_failed'));
+            error.code = payload.productivity_error_code
+                || (String(payload.exc_type || '').endsWith('MultipleLineGroupsError') ? 'multiple_line_groups' : '');
+            throw error;
         }
         return payload.message;
     }
@@ -110,7 +139,7 @@
         $('#device-name-value').textContent = name || t('ui.device_name_unknown');
         $('#device-id-value').textContent = state.device_id;
         $('#device-line-value').textContent = lineName(state.bootstrap.device?.line) || t('ui.not_available');
-        $('#device-scope-value').textContent = scopeLabel() || t('ui.not_available');
+        $('#device-scope-value').textContent = scopeConflict ? t('ui.not_available') : (scopeLabel() || t('ui.not_available'));
         $('#device-id').value = active ? state.device_id : '';
     }
 
@@ -185,12 +214,13 @@
     async function loadList(kind) {
         const sequence = ++refreshSequence[kind];
         const list = $(`#${kind}-list`);
+        if (scopeConflict) { list.innerHTML = ''; $(`#${kind}-pagination`).innerHTML = ''; return; }
         list.innerHTML = `<div class="productivity-card productivity-empty">${esc(t('ui.loading'))}</div>`;
         if (!state.device_id) { list.innerHTML = `<div class="productivity-card productivity-empty">${esc(t('ui.device_required'))}</div>`; return; }
         if (navigator.onLine) {
             try {
                 const result = await call(kind === 'plans' ? 'list_plans' : 'list_reports', { device_id: state.device_id, page: pages[kind].page, page_size: 10, ...filterValues(kind) });
-                if (sequence !== refreshSequence[kind]) return;
+                if (sequence !== refreshSequence[kind] || scopeConflict) return;
                 const remote = result.items || [];
                 const pending = !Object.values(filterValues(kind)).some(Boolean) && pages[kind].page === 1
                     ? [...new Map(state.operations.filter(o => o.action === (kind === 'plans' ? 'save_plan' : 'save_report'))
@@ -203,7 +233,8 @@
                     persist();
                 }
             } catch (error) {
-                if (sequence !== refreshSequence[kind]) return;
+                if (sequence !== refreshSequence[kind] || scopeConflict) return;
+                if (error.code === 'multiple_line_groups') { setScopeConflict(errorMessage(error)); return; }
                 notice(errorMessage(error), 'danger');
                 const offline = offlineRows(kind);
                 pages[kind].total = offline.length;
@@ -252,14 +283,23 @@
             return;
         }
         if (navigator.onLine) {
-            try { state.bootstrap = await call('bootstrap', { device_id: state.device_id }); persist(); fillMasters(); updateStatus(); }
-            catch (error) { notice(errorMessage(error), 'danger'); }
+            try {
+                const recoveringScope = !!scopeConflict;
+                state.bootstrap = await call('bootstrap', { device_id: state.device_id });
+                clearScopeConflict();
+                persist(); fillMasters(); updateStatus();
+                if (recoveringScope && !$('#line-info-view').hidden) await loadLineInfo();
+            }
+            catch (error) {
+                if (error.code === 'multiple_line_groups') { setScopeConflict(errorMessage(error)); return; }
+                notice(errorMessage(error), 'danger');
+            }
         } else { fillMasters(); updateStatus(); }
         await Promise.all([loadList('plans'), loadList('reports')]);
     }
 
     async function sync() {
-        if (syncing || !state.operations.length || !state.device_id || !navigator.onLine) return;
+        if (scopeConflict || syncing || !state.operations.length || !state.device_id || !navigator.onLine) return;
         syncing = true;
         try {
             const pending = [...state.operations];
@@ -426,7 +466,7 @@
     }
 
     async function loadLineInfo() {
-        if (!state.device_id) return;
+        if (!state.device_id || scopeConflict) return;
         const form = $('#line-info-form'), line = selectedLine(form.elements.line.value);
         const pending = [...state.operations].reverse().find(op => op.action === 'save_line_info' && sameScopeLine(op.values?.line, line));
         if (pending) {
@@ -441,7 +481,10 @@
             editing.line = row?.name || null;
             form.elements.line_leader_name.value = row?.line_leader_name || '';
             form.elements.technical_leader_name.value = row?.technical_leader_name || '';
-        } catch (error) { notice(errorMessage(error), 'danger'); }
+        } catch (error) {
+            if (error.code === 'multiple_line_groups') setScopeConflict(errorMessage(error));
+            else notice(errorMessage(error), 'danger');
+        }
     }
 
     function findRow(kind, name) { return (rows[kind] || []).find(x => x.name === name) || state[kind].find(x => x.name === name); }
@@ -482,7 +525,10 @@
             state.device_id = device.id;
             state.bootstrap = { ...state.bootstrap, device };
             persist(); updateStatus(); $('#device-dialog').close(); await refresh(); await sync();
-        } catch (error) { notice(errorMessage(error), 'danger'); }
+        } catch (error) {
+            if (error.code === 'multiple_line_groups' && newId === state.device_id) setScopeConflict(errorMessage(error));
+            else notice(errorMessage(error), 'danger');
+        }
     });
     $('#clear-device-cache').addEventListener('click', async () => {
         const unsaved = state.operations.length + state.failed.length;

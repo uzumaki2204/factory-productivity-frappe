@@ -26,11 +26,14 @@ sys.modules['frappe.model.document'] = document
 master = types.ModuleType('factory_management')
 master.device_registry = Row(ready=lambda d:d.status=='Approved' and d.is_active)
 sys.modules['factory_management'] = master
-from factory_productivity import api
+from factory_productivity import api, merged_scope
+from factory_productivity.factory_productivity.doctype.productivity_production_plan.productivity_production_plan import (
+    ProductivityProductionPlan,
+)
+from factory_productivity.factory_productivity.doctype.productivity_report.productivity_report import (
+    ProductivityReport,
+)
 from factory_productivity.i18n import message
-from factory_productivity.factory_productivity.doctype.productivity_production_plan.productivity_production_plan import ProductivityProductionPlan
-from factory_productivity.factory_productivity.doctype.productivity_report.productivity_report import ProductivityReport
-from factory_productivity import merged_scope
 
 
 class ProductivityTests(unittest.TestCase):
@@ -124,7 +127,7 @@ class ProductivityTests(unittest.TestCase):
         original=self.get_value
         for found, valid in [('OTHER',False),('R',True),(None,True)]:
             with self.subTest(found=found):
-                frappe.db.get_value.side_effect=lambda dt,*a,**kw: found if dt=='Productivity Report' else original(dt,*a,**kw)
+                frappe.db.get_value.side_effect=lambda dt,*a,found=found,**kw: found if dt=='Productivity Report' else original(dt,*a,**kw)
                 if valid: self.doc.validate()
                 else:
                     with self.assertRaises(ValueError): self.doc.validate()
@@ -222,8 +225,57 @@ class ProductivityTests(unittest.TestCase):
             actual = api.check_device('D')
         self.assertEqual('B', actual['line'])
         self.assertEqual('A', actual['canonical_line'])
-        self.assertEqual(['A', 'B'], actual['scope_lines'])
+        self.assertEqual(['B', 'A'], actual['scope_lines'])
         self.assertTrue(actual['is_merged_scope'])
+
+    def test_deleted_group_is_excluded_from_merged_scope(self):
+        lines = [Row(name='A', line_code='315', line_name='C1X3'), Row(name='B', line_code='316', line_name='C2X3')]
+
+        def get_value(doctype, name, fields=None, **kwargs):
+            if doctype == 'Production Line':
+                return Row(name='B', company='C', factory='F', line_code='316', line_name='C2X3', is_deleted=0)
+            if doctype == 'Line Group':
+                return Row(company='C', factory='F', is_active=1, is_deleted=int(name == 'OLD'),
+                           group_code=name, group_name=name)
+            return None
+
+        def get_all(doctype, **kwargs):
+            filters = kwargs['filters']
+            if doctype == 'Line Group Assignment':
+                self.assertEqual(0, filters['is_deleted'])
+                return ([Row(line_group='G'), Row(line_group='OLD')] if 'line' in filters
+                        else [Row(line='A'), Row(line='B')])
+            if doctype == 'Production Line':
+                self.assertEqual(0, filters['is_deleted'])
+                return lines
+            return []
+
+        with patch.object(frappe, 'get_meta', return_value=Row(has_field=lambda field: field == 'is_deleted'), create=True), \
+                patch.object(frappe.db, 'get_value', side_effect=get_value), \
+                patch.object(frappe, 'get_all', side_effect=get_all):
+            scope = merged_scope.resolve_scope('C', 'F', 'B')
+        self.assertEqual('G', scope['line_group'])
+        self.assertEqual('A', scope['canonical_line'])
+        self.assertEqual(['B', 'A'], scope['line_ids'])
+        self.assertTrue(scope['is_merged_scope'])
+
+    def test_multiple_active_groups_return_named_configuration_error(self):
+        def get_value(doctype, name, fields=None, **kwargs):
+            if doctype == 'Production Line':
+                return Row(name='B', company='C', factory='F', line_code='316', line_name='C2X3')
+            if doctype == 'Line Group':
+                return Row(company='C', factory='F', is_active=1, group_code=name, group_name=name)
+            return None
+
+        frappe.local.response = Row()
+        try:
+            with patch.object(frappe.db, 'get_value', side_effect=get_value), \
+                    patch.object(frappe, 'get_all', return_value=[Row(line_group='G1'), Row(line_group='G2')]), \
+                    self.assertRaisesRegex(merged_scope.MultipleLineGroupsError, 'C2X3.*G1, G2'):
+                merged_scope.resolve_scope('C', 'F', 'B')
+            self.assertEqual('multiple_line_groups', frappe.local.response['productivity_error_code'])
+        finally:
+            frappe.local.pop('response', None)
 
     def test_plan_save_uses_pair_canonical_line_even_from_other_member(self):
         device = Row(name='D', company='C', factory='F', line='B')

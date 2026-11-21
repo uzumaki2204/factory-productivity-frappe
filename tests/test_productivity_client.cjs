@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const root = path.resolve(__dirname, '..');
 const texts = JSON.parse(fs.readFileSync(path.join(root, 'factory_productivity/i18n.json'), 'utf8')).vi;
 const script = fs.readFileSync(path.join(root, 'factory_productivity/public/js/productivity.js'), 'utf8')
-    .replace('updateStatus(); refresh().then(sync);', 'globalThis.appUnderTest = { state, sync, saveWithConfirmation, slotName, editing };');
+    .replace('updateStatus(); refresh().then(sync);', 'globalThis.appUnderTest = { state, sync, saveWithConfirmation, slotName, editing, refresh };');
 
 function start(initial, reply) {
     const elements = new Map();
@@ -17,7 +17,7 @@ function start(initial, reply) {
         if (!elements.has(selector)) {
             const fields = new Map();
             elements.set(selector, {
-                textContent: '', innerHTML: '', hidden: false, open: false, dataset: {},
+                textContent: '', innerHTML: '', hidden: selector === '#reports-view' || selector === '#line-info-view', open: false, dataset: {},
                 classList: { add() {}, remove() {}, toggle() {} },
                 elements: new Proxy({}, { get(_, name) { if (!fields.has(name)) fields.set(name, field()); return fields.get(name); } }),
                 handlers: {},
@@ -45,7 +45,13 @@ function start(initial, reply) {
         URL,
         setTimeout: () => 1,
         clearTimeout() {},
-        fetch: async (url, options) => ({ ok: true, json: async () => ({ message: reply(url.pathname.split('.').pop(), options) }) }),
+        fetch: async (url, options) => {
+            const result = reply(url.pathname.split('.').pop(), options);
+            return result?.__error
+                ? { ok: false, json: async () => ({ exc: result.exc, exc_type: result.exc_type,
+                    productivity_error_code: result.code, message: result.message }) }
+                : { ok: true, json: async () => ({ message: result }) };
+        },
     };
     vm.createContext(context);
     vm.runInContext(script, context);
@@ -130,6 +136,40 @@ test('time slot labels show the configured start and end without duplicating exi
     assert.equal(app.slotName('S1'), 'Ca 1 (07:30–09:30)');
     assert.equal(app.slotName('S2'), 'Ca 2 (09:30–11:30)');
     assert.equal(app.slotName('S3'), 'Ca 3');
+});
+
+test('scope conflict blocks stale rows and recovers to the merged line display', async () => {
+    let conflict = true;
+    const initial = { device_id: 'DEV', operations: [], failed: [],
+        plans: [{ name: 'OLD', line: 'B', product: 'P' }], reports: [],
+        bootstrap: { device: { line: 'B', is_merged_scope: true, scope_lines: ['A', 'B'] },
+            lines: [{ name: 'A', line_name: 'C1X3' }, { name: 'B', line_name: 'C2X3' }] } };
+    const { app, element } = start(initial, method => {
+        if (method === 'bootstrap') {
+            return conflict
+                ? { __error: true, code: 'multiple_line_groups', message: 'Chuyền C2X3 đang thuộc nhóm G1, G2.' }
+                : { device: { name: 'Tablet', line: 'B', canonical_line: 'A',
+                    scope_lines: ['B', 'A'], is_merged_scope: true },
+                    lines: [{ name: 'A', line_name: 'C1X3' }, { name: 'B', line_name: 'C2X3' }],
+                    products: [], time_slots: [] };
+        }
+        if (method === 'list_plans' || method === 'list_reports') return { items: [], total: 0 };
+        throw new Error(`Unexpected method: ${method}`);
+    });
+    element('#plans-list').innerHTML = 'stale';
+    await app.refresh();
+    assert.equal(element('#scope-error').hidden, false);
+    assert.match(element('#scope-error').textContent, /G1, G2/);
+    assert.equal(element('#plans-list').innerHTML, '');
+    assert.equal(element('#new-plan').disabled, true);
+    assert.equal(app.state.plans[0].name, 'OLD');
+
+    conflict = false;
+    await app.refresh();
+    assert.equal(element('#scope-error').hidden, true);
+    assert.equal(element('#new-plan').disabled, false);
+    assert.match(element('#plan-scope-label').textContent, /C2X3 \+ C1X3/);
+    assert.equal(element('#plan-line-field').hidden, true);
 });
 
 test('saving a report online keeps it open for updates to the same record', async () => {

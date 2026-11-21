@@ -4,7 +4,6 @@ from datetime import date
 
 import frappe
 
-from factory_productivity.i18n import message
 from factory_productivity.model import fail
 
 PLAN = "Productivity Production Plan"
@@ -13,45 +12,75 @@ LINE_INFO = "Productivity Line Info"
 REPAIR_ACTOR = "system:merged-scope-repair"
 
 
+class MultipleLineGroupsError(frappe.ValidationError):
+    """The device line has more than one active productivity scope."""
+
+
+def _active_filters(doctype, **filters):
+    filters["is_active"] = 1
+    get_meta = getattr(frappe, "get_meta", None)
+    if get_meta and get_meta(doctype).has_field("is_deleted"):
+        filters["is_deleted"] = 0
+    return filters
+
+
+def _not_deleted(doctype, **filters):
+    get_meta = getattr(frappe, "get_meta", None)
+    if get_meta and get_meta(doctype).has_field("is_deleted"):
+        filters["is_deleted"] = 0
+    return filters
+
+
 def _line_key(row):
     return (str(row.line_code or "").casefold(), str(row.line_name or "").casefold(), row.name)
 
 
 def resolve_scope(company, factory, home_line):
-    home = frappe.db.get_value("Production Line", home_line, ["name", "company", "factory", "line_code", "line_name"], as_dict=True)
-    if not home or home.company != company or home.factory != factory:
+    home_fields = ["name", "company", "factory", "line_code", "line_name"]
+    if "is_deleted" in _not_deleted("Production Line"):
+        home_fields.append("is_deleted")
+    home = frappe.db.get_value("Production Line", home_line, home_fields, as_dict=True)
+    if not home or home.company != company or home.factory != factory or home.get("is_deleted"):
         fail("error.line_scope", frappe.PermissionError)
     candidates = {
         row.line_group for row in frappe.get_all(
             "Line Group Assignment", fields=["line_group"],
-            filters={"line": home_line, "is_active": 1}, limit_page_length=200,
+            filters=_active_filters("Line Group Assignment", line=home_line), limit_page_length=200,
         ) if row.line_group
     }
     groups = []
     group_details = {}
-    for group in candidates:
-        details = frappe.db.get_value("Line Group", group, ["company", "factory", "is_active", "group_code", "group_name"], as_dict=True)
-        if details and details.company == company and details.factory == factory and details.is_active:
+    group_fields = ["company", "factory", "is_active", "group_code", "group_name"]
+    if "is_deleted" in _not_deleted("Line Group"):
+        group_fields.append("is_deleted")
+    for group in sorted(candidates):
+        details = frappe.db.get_value("Line Group", group, group_fields, as_dict=True)
+        if details and details.company == company and details.factory == factory and details.is_active and not details.get("is_deleted"):
             groups.append(group)
             group_details[group] = details
     if len(groups) > 1:
-        fail("error.multiple_line_groups")
+        response = getattr(frappe.local, "response", None)
+        if response is not None:
+            response["productivity_error_code"] = "multiple_line_groups"
+        labels = [group_details[group].group_name or group_details[group].group_code or group for group in groups]
+        fail("error.multiple_line_groups", MultipleLineGroupsError,
+             line=home.line_name or home.line_code or home.name, groups=", ".join(labels))
     group = groups[0] if groups else None
     line_ids = {home_line}
     if group:
         line_ids.update(row.line for row in frappe.get_all(
             "Line Group Assignment", fields=["line"],
-            filters={"line_group": group, "is_active": 1}, limit_page_length=1000,
+            filters=_active_filters("Line Group Assignment", line_group=group), limit_page_length=1000,
         ))
     lines = frappe.get_all(
         "Production Line", fields=["name", "line_code", "line_name"],
-        filters={"name": ["in", list(line_ids)], "company": company, "factory": factory},
+        filters=_not_deleted("Production Line", name=["in", list(line_ids)], company=company, factory=factory),
         limit_page_length=1000,
     )
-    lines = sorted(lines, key=_line_key)
+    lines = sorted(lines, key=lambda row: (row.name != home_line, *_line_key(row)))
     if not lines:
         fail("error.line_scope", frappe.PermissionError)
-    canonical = lines[0].name
+    canonical = min(lines, key=_line_key).name
     return {"company": company, "factory": factory, "home_line": home_line, "line_group": group,
             "group_code": group_details[group].group_code if group else None,
             "group_name": group_details[group].group_name if group else None, "lines": lines,
