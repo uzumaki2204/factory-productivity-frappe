@@ -63,10 +63,15 @@
     const canonicalLine = () => state.bootstrap.device?.canonical_line || state.bootstrap.device?.line || '';
     const selectedLine = line => mergedScope() ? canonicalLine() : (line || state.bootstrap.device?.line || '');
     const sameScopeLine = (left, right) => left === right || (mergedScope() && (state.bootstrap.device?.scope_lines || []).includes(left) && (state.bootstrap.device?.scope_lines || []).includes(right));
+    const lineCode = name => { const line = (state.bootstrap.lines || []).find(item => item.name === name); return line ? (line.line_code || line.name) : (name || ''); };
     const scopeLabel = () => mergedScope()
         ? (state.bootstrap.device?.scope_lines || []).map(id => { const line = (state.bootstrap.lines || []).find(item => item.name === id); return line?.line_name || line?.line_code || id; }).join(' + ')
         : lineName(state.bootstrap.device?.line);
     const recordLineName = line => mergedScope() && (state.bootstrap.device?.scope_lines || []).includes(line) ? scopeLabel() : lineName(line);
+    const formatDate = value => {
+        const parts = String(value || '').slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        return parts ? `${parts[3]}/${parts[2]}/${parts[1]}` : (value || t('ui.empty_value'));
+    };
     const slotTime = value => {
         const parts = String(value ?? '').match(/^(\d{1,2}):(\d{2})/);
         return parts ? `${parts[1].padStart(2, '0')}:${parts[2]}` : '';
@@ -451,15 +456,18 @@
             const status = pending ? `<span class="indicator-pill orange">${esc(t('ui.awaiting_sync'))}</span>` : '';
             const total = (row.time_slots || []).reduce((n, x) => n + Number(x.finished_quantity || 0), 0);
             const closed = !!row.closed_production_date;
-            const meta = plan ? `${t('ui.line_start_date')}: ${row.line_start_date || ''} · ${t('ui.shipment_date')}: ${row.shipment_date || ''}` : `${t('ui.production_date')}: ${row.production_date || ''} · ${t('ui.finished_total')}: ${total}`;
-            const details = plan ? field('ui.planned_quantity', row.planned_quantity) + field('ui.line_start_date', row.line_start_date) + field('ui.shipment_date', row.shipment_date) + field('ui.closed_date', row.closed_production_date || '') : field('ui.daily_target', row.daily_target_quantity) + field('ui.hours', row.working_hours) + field('ui.worker_count', row.worker_count) + field('ui.ironing_delivery', row.ironing_delivery_quantity);
+            const reportMeta = `${t('ui.production_date')}: ${row.production_date || ''} · ${t('ui.finished_total')}: ${total}`;
+            const details = plan ? field('ui.planned_quantity', row.planned_quantity) + field('ui.line_start_date', formatDate(row.line_start_date)) + field('ui.shipment_date', formatDate(row.shipment_date)) + field('ui.closed_date', formatDate(row.closed_production_date)) : field('ui.daily_target', row.daily_target_quantity) + field('ui.hours', row.working_hours) + field('ui.worker_count', row.worker_count) + field('ui.ironing_delivery', row.ironing_delivery_quantity);
+            const summaryMeta = plan
+                ? `<div class="productivity-record-meta productivity-plan-record-meta"><span>${esc(t('ui.line'))}: <strong>${esc(lineCode(deviceLine() || row.line))}</strong></span><span>${esc(t('ui.line_start_short'))}: <strong>${esc(formatDate(row.line_start_date))}</strong></span></div>`
+                : `<div class="productivity-record-meta"><span>${esc(recordLineName(row.line))}</span><span>${esc(reportMeta)}</span></div>`;
             const buttons = pending ? actionButton(plan ? 'edit-plan' : 'edit-report', row, 'ui.edit', 'btn-primary') : plan
                 ? actionButton('edit-plan', row, 'ui.edit', 'btn-primary', 'productivity-plan-action')
                     + actionButton(closed ? 'reopen-plan' : 'finish-plan', row, closed ? 'ui.reopen' : 'ui.finish', closed ? 'btn-success' : 'btn-warning', 'productivity-plan-action')
                     + (closed ? actionButton('change-date-plan', row, 'ui.change_closed_date') : '')
                     + actionButton('delete-plan', row, 'ui.delete', 'btn-danger', 'productivity-plan-action')
                 : actionButton('detail-report', row, 'ui.detail') + actionButton('edit-report', row, 'ui.edit') + actionButton('delete-report', row, 'ui.delete');
-            return `<details class="productivity-record"><summary><div class="productivity-record-top"><span class="productivity-record-title">${esc(productCode(row.product))}</span>${status || (plan ? `<span class="indicator-pill ${closed ? 'gray' : 'green'}">${esc(t(closed ? 'ui.closed' : 'ui.open'))}</span>` : `<strong>${esc(total)}</strong>`)}</div><div class="productivity-record-meta"><span>${esc(recordLineName(row.line))}</span><span>${esc(meta)}</span></div></summary><div class="productivity-record-body"><dl>${details}</dl><div class="productivity-card-actions">${buttons}</div></div></details>`;
+            return `<details class="productivity-record"><summary><div class="productivity-record-top"><span class="productivity-record-title">${esc(productCode(row.product))}</span>${status || (plan ? `<span class="indicator-pill ${closed ? 'gray' : 'green'}">${esc(t(closed ? 'ui.closed' : 'ui.open'))}</span>` : `<strong>${esc(total)}</strong>`)}</div>${summaryMeta}</summary><div class="productivity-record-body"><dl>${details}</dl><div class="productivity-card-actions">${buttons}</div></div></details>`;
         }).join('');
         const pg = pages[kind];
         const count = Math.max(1, Math.ceil(pg.total / 10));
