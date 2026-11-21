@@ -59,6 +59,7 @@
         && state.bootstrap.device.scope_lines.length === 2
         && new Set(state.bootstrap.device.scope_lines).size === 2
         && state.bootstrap.device.scope_lines.includes(canonicalLine());
+    const deviceLine = () => state.bootstrap.device?.line || '';
     const canonicalLine = () => state.bootstrap.device?.canonical_line || state.bootstrap.device?.line || '';
     const selectedLine = line => mergedScope() ? canonicalLine() : (line || state.bootstrap.device?.line || '');
     const sameScopeLine = (left, right) => left === right || (mergedScope() && (state.bootstrap.device?.scope_lines || []).includes(left) && (state.bootstrap.device?.scope_lines || []).includes(right));
@@ -354,8 +355,12 @@
     }
 
     function fillMasters() {
-        const lines = mergedScope() ? (state.bootstrap.lines || []).filter(row => row.name === canonicalLine()) : (state.bootstrap.lines || []);
-        for (const form of [$('#plan-form'), $('#report-form'), $('#line-info-form')]) options(form.elements.line, lines, x => mergedScope() ? scopeLabel() : lineName(x.name), selectedLine(form.elements.line.value));
+        const allLines = state.bootstrap.lines || [];
+        const lines = mergedScope() ? allLines.filter(row => row.name === canonicalLine()) : allLines;
+        for (const form of [$('#plan-form'), $('#report-form')]) options(form.elements.line, lines, x => mergedScope() ? scopeLabel() : lineName(x.name), selectedLine(form.elements.line.value));
+        const registeredLine = deviceLine();
+        const lineInfoLine = allLines.find(row => row.name === registeredLine) || (registeredLine ? { name: registeredLine } : null);
+        options($('#line-info-form').elements.line, lineInfoLine ? [lineInfoLine] : [], x => lineName(x.name), registeredLine);
         updatePlanProductPicker();
         $('#plan-line-field').hidden = lines.length === 1;
         $('#report-line-field').hidden = lines.length === 1;
@@ -778,7 +783,7 @@
             await setView('line-info');
             const form = $('#line-info-form');
             editing.line = operation.values.name;
-            form.elements.line.value = operation.values.line;
+            form.elements.line.value = deviceLine();
             form.elements.line_leader_name.value = operation.values.line_leader_name || '';
             form.elements.technical_leader_name.value = operation.values.technical_leader_name || '';
         }
